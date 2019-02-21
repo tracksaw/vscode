@@ -28,7 +28,7 @@ export class ExtHostDocuments implements ExtHostDocumentsShape {
 	private _toDispose: IDisposable[];
 	private _proxy: MainThreadDocumentsShape;
 	private _documentsAndEditors: ExtHostDocumentsAndEditors;
-	private _documentLoader = new Map<string, Thenable<ExtHostDocumentData>>();
+	private _documentLoader = new Map<string, Promise<ExtHostDocumentData>>();
 
 	constructor(mainContext: IMainContext, documentsAndEditors: ExtHostDocumentsAndEditors) {
 		this._proxy = mainContext.getProxy(MainContext.MainThreadDocuments);
@@ -56,7 +56,7 @@ export class ExtHostDocuments implements ExtHostDocumentsShape {
 		return this._documentsAndEditors.allDocuments();
 	}
 
-	public getDocumentData(resource: vscode.Uri): ExtHostDocumentData {
+	public getDocumentData(resource: vscode.Uri): ExtHostDocumentData | undefined {
 		if (!resource) {
 			return undefined;
 		}
@@ -67,7 +67,15 @@ export class ExtHostDocuments implements ExtHostDocumentsShape {
 		return undefined;
 	}
 
-	public ensureDocumentData(uri: URI): Thenable<ExtHostDocumentData> {
+	public getDocument(resource: vscode.Uri): vscode.TextDocument {
+		const data = this.getDocumentData(resource);
+		if (!data || !data.document) {
+			throw new Error('Unable to retrieve document from URI');
+		}
+		return data.document;
+	}
+
+	public ensureDocumentData(uri: URI): Promise<ExtHostDocumentData> {
 
 		let cached = this._documentsAndEditors.getDocument(uri.toString());
 		if (cached) {
@@ -89,7 +97,7 @@ export class ExtHostDocuments implements ExtHostDocumentsShape {
 		return promise;
 	}
 
-	public createDocumentData(options?: { language?: string; content?: string }): Thenable<URI> {
+	public createDocumentData(options?: { language?: string; content?: string }): Promise<URI> {
 		return this._proxy.$tryCreateDocument(options).then(data => URI.revive(data));
 	}
 
@@ -143,7 +151,7 @@ export class ExtHostDocuments implements ExtHostDocumentsShape {
 		});
 	}
 
-	public setWordDefinitionFor(modeId: string, wordDefinition: RegExp): void {
+	public setWordDefinitionFor(modeId: string, wordDefinition: RegExp | undefined): void {
 		setWordDefinitionFor(modeId, wordDefinition);
 	}
 }

@@ -3,14 +3,21 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { tmpdir } from 'os';
+import { join } from 'vs/base/common/path';
+import * as vscode from 'vscode';
 import { URI } from 'vs/base/common/uri';
 import { isMalformedFileUri } from 'vs/base/common/resources';
-import * as vscode from 'vscode';
 import * as typeConverters from 'vs/workbench/api/node/extHostTypeConverters';
 import { CommandsRegistry, ICommandService, ICommandHandler } from 'vs/platform/commands/common/commands';
 import { ITextEditorOptions } from 'vs/platform/editor/common/editor';
 import { EditorViewColumn } from 'vs/workbench/api/shared/editor';
-import { EditorGroupLayout } from 'vs/workbench/services/group/common/editorGroupsService';
+import { EditorGroupLayout } from 'vs/workbench/services/editor/common/editorGroupsService';
+import { ServicesAccessor } from 'vs/platform/instantiation/common/instantiation';
+import { IWorkspaceIdentifier, ISingleFolderWorkspaceIdentifier } from 'vs/platform/workspaces/common/workspaces';
+import { IWindowsService } from 'vs/platform/windows/common/windows';
+import { IDownloadService } from 'vs/platform/download/common/download';
+import { generateUuid } from 'vs/base/common/uuid';
 
 // -----------------------------------------------------------------
 // The following commands are registered on both sides separately.
@@ -20,7 +27,7 @@ import { EditorGroupLayout } from 'vs/workbench/services/group/common/editorGrou
 // -----------------------------------------------------------------
 
 export interface ICommandsExecutor {
-	executeCommand<T>(id: string, ...args: any[]): Thenable<T>;
+	executeCommand<T>(id: string, ...args: any[]): Promise<T | undefined>;
 }
 
 function adjustHandler(handler: (executor: ICommandsExecutor, ...args: any[]) => any): ICommandHandler {
@@ -31,7 +38,7 @@ function adjustHandler(handler: (executor: ICommandsExecutor, ...args: any[]) =>
 
 export class PreviewHTMLAPICommand {
 	public static ID = 'vscode.previewHtml';
-	public static execute(executor: ICommandsExecutor, uri: URI, position?: vscode.ViewColumn, label?: string, options?: any): Thenable<any> {
+	public static execute(executor: ICommandsExecutor, uri: URI, position?: vscode.ViewColumn, label?: string, options?: any): Promise<any> {
 		return executor.executeCommand('_workbench.previewHtml',
 			uri,
 			typeof position === 'number' && typeConverters.ViewColumn.from(position),
@@ -44,7 +51,7 @@ CommandsRegistry.registerCommand(PreviewHTMLAPICommand.ID, adjustHandler(Preview
 
 export class OpenFolderAPICommand {
 	public static ID = 'vscode.openFolder';
-	public static execute(executor: ICommandsExecutor, uri?: URI, forceNewWindow?: boolean): Thenable<any> {
+	public static execute(executor: ICommandsExecutor, uri?: URI, forceNewWindow?: boolean): Promise<any> {
 		if (!uri) {
 			return executor.executeCommand('_files.pickFolderAndOpen', forceNewWindow);
 		}
@@ -55,14 +62,31 @@ export class OpenFolderAPICommand {
 			uri = correctedUri;
 		}
 
-		return executor.executeCommand('_files.windowOpen', [uri], forceNewWindow);
+		return executor.executeCommand('_files.windowOpen', { urisToOpen: [{ uri }], forceNewWindow });
 	}
 }
-CommandsRegistry.registerCommand(OpenFolderAPICommand.ID, adjustHandler(OpenFolderAPICommand.execute));
+CommandsRegistry.registerCommand({
+	id: OpenFolderAPICommand.ID,
+	handler: adjustHandler(OpenFolderAPICommand.execute),
+	description: {
+		description: `Open a folder`,
+		args: [{
+			name: 'uri',
+			schema: {
+				'type': 'string'
+			}
+		}, {
+			name: 'forceNewWindow',
+			schema: {
+				'type': 'boolean'
+			}
+		}]
+	}
+});
 
 export class DiffAPICommand {
 	public static ID = 'vscode.diff';
-	public static execute(executor: ICommandsExecutor, left: URI, right: URI, label: string, options?: vscode.TextDocumentShowOptions): Thenable<any> {
+	public static execute(executor: ICommandsExecutor, left: URI, right: URI, label: string, options?: vscode.TextDocumentShowOptions): Promise<any> {
 		return executor.executeCommand('_workbench.diff', [
 			left, right,
 			label,
@@ -76,9 +100,9 @@ CommandsRegistry.registerCommand(DiffAPICommand.ID, adjustHandler(DiffAPICommand
 
 export class OpenAPICommand {
 	public static ID = 'vscode.open';
-	public static execute(executor: ICommandsExecutor, resource: URI, columnOrOptions?: vscode.ViewColumn | vscode.TextDocumentShowOptions, label?: string): Thenable<any> {
-		let options: ITextEditorOptions;
-		let position: EditorViewColumn;
+	public static execute(executor: ICommandsExecutor, resource: URI, columnOrOptions?: vscode.ViewColumn | vscode.TextDocumentShowOptions, label?: string): Promise<any> {
+		let options: ITextEditorOptions | undefined;
+		let position: EditorViewColumn | undefined;
 
 		if (columnOrOptions) {
 			if (typeof columnOrOptions === 'number') {
@@ -99,9 +123,15 @@ export class OpenAPICommand {
 }
 CommandsRegistry.registerCommand(OpenAPICommand.ID, adjustHandler(OpenAPICommand.execute));
 
+CommandsRegistry.registerCommand('_workbench.removeFromRecentlyOpened', function (accessor: ServicesAccessor, path: IWorkspaceIdentifier | ISingleFolderWorkspaceIdentifier | URI | string) {
+	const windowsService = accessor.get(IWindowsService);
+
+	return windowsService.removeFromRecentlyOpened([path]).then(() => undefined);
+});
+
 export class RemoveFromRecentlyOpenedAPICommand {
 	public static ID = 'vscode.removeFromRecentlyOpened';
-	public static execute(executor: ICommandsExecutor, path: string): Thenable<any> {
+	public static execute(executor: ICommandsExecutor, path: string): Promise<any> {
 		return executor.executeCommand('_workbench.removeFromRecentlyOpened', path);
 	}
 }
@@ -109,8 +139,39 @@ CommandsRegistry.registerCommand(RemoveFromRecentlyOpenedAPICommand.ID, adjustHa
 
 export class SetEditorLayoutAPICommand {
 	public static ID = 'vscode.setEditorLayout';
-	public static execute(executor: ICommandsExecutor, layout: EditorGroupLayout): Thenable<any> {
+	public static execute(executor: ICommandsExecutor, layout: EditorGroupLayout): Promise<any> {
 		return executor.executeCommand('layoutEditorGroups', layout);
 	}
 }
-CommandsRegistry.registerCommand(SetEditorLayoutAPICommand.ID, adjustHandler(SetEditorLayoutAPICommand.execute));
+CommandsRegistry.registerCommand({
+	id: SetEditorLayoutAPICommand.ID,
+	handler: adjustHandler(SetEditorLayoutAPICommand.execute),
+	description: {
+		description: 'Set Editor Layout',
+		args: [{
+			name: 'args',
+			schema: {
+				'type': 'object',
+				'required': ['groups'],
+				'properties': {
+					'orientation': {
+						'type': 'number',
+						'default': 0,
+						'enum': [0, 1]
+					},
+					'groups': {
+						'$ref': '#/definitions/editorGroupsSchema', // defined in keybindingService.ts ...
+						'default': [{}, {}],
+					}
+				}
+			}
+		}]
+	}
+});
+
+CommandsRegistry.registerCommand('_workbench.downloadResource', function (accessor: ServicesAccessor, resource: URI) {
+	const downloadService = accessor.get(IDownloadService);
+	const location = join(tmpdir(), generateUuid());
+
+	return downloadService.download(resource, location).then(() => URI.file(location));
+});

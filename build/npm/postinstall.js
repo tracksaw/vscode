@@ -17,6 +17,7 @@ function yarnInstall(location, opts) {
 	opts.cwd = location;
 	opts.stdio = 'inherit';
 
+	console.log('Installing dependencies in \'%s\'.', location);
 	const result = cp.spawnSync(yarn, ['install'], opts);
 
 	if (result.error || result.status !== 0) {
@@ -61,3 +62,10 @@ runtime "${runtime}"`;
 yarnInstall(`build`); // node modules required for build
 yarnInstall('test/smoke'); // node modules required for smoketest
 yarnInstallBuildDependencies(); // node modules for watching, specific to host node version, not electron
+
+// Remove the windows process tree typings as this causes duplicate identifier errors in tsc builds
+const processTreeDts = path.join('node_modules', 'windows-process-tree', 'typings', 'windows-process-tree.d.ts');
+if (fs.existsSync(processTreeDts)) {
+	console.log('Removing windows-process-tree.d.ts');
+	fs.unlinkSync(processTreeDts);
+}

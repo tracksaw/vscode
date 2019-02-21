@@ -6,40 +6,37 @@
 import { Event } from 'vs/base/common/event';
 import Severity from 'vs/base/common/severity';
 import { URI } from 'vs/base/common/uri';
-import { TPromise } from 'vs/base/common/winjs.base';
 import { createDecorator } from 'vs/platform/instantiation/common/instantiation';
 import { IExtensionPoint } from 'vs/workbench/services/extensions/common/extensionsRegistry';
+import { ExtensionIdentifier, IExtensionManifest, IExtension, ExtensionType } from 'vs/platform/extensions/common/extensions';
+import { getGalleryExtensionId } from 'vs/platform/extensionManagement/common/extensionManagementUtil';
 
-export interface IExtensionDescription {
-	readonly id: string;
-	readonly name: string;
+export interface IExtensionDescription extends IExtensionManifest {
+	readonly identifier: ExtensionIdentifier;
 	readonly uuid?: string;
-	readonly displayName?: string;
-	readonly version: string;
-	readonly publisher: string;
 	readonly isBuiltin: boolean;
 	readonly isUnderDevelopment: boolean;
 	readonly extensionLocation: URI;
-	readonly extensionDependencies?: string[];
-	readonly activationEvents?: string[];
-	readonly engines: {
-		vscode: string;
-	};
-	readonly main?: string;
-	readonly contributes?: { [point: string]: any; };
-	readonly keywords?: string[];
-	readonly repository?: {
-		url: string;
-	};
 	enableProposedApi?: boolean;
 }
+
+export const nullExtensionDescription = Object.freeze(<IExtensionDescription>{
+	identifier: new ExtensionIdentifier('nullExtensionDescription'),
+	name: 'Null Extension Description',
+	version: '0.0.0',
+	publisher: 'vscode',
+	enableProposedApi: false,
+	engines: { vscode: '' },
+	extensionLocation: URI.parse('void:location'),
+	isBuiltin: false,
+});
 
 export const IExtensionService = createDecorator<IExtensionService>('extensionService');
 
 export interface IMessage {
 	type: Severity;
 	message: string;
-	extensionId: string;
+	extensionId: ExtensionIdentifier;
 	extensionPointId: string;
 }
 
@@ -119,10 +116,15 @@ export const ExtensionHostLogFileName = 'exthost';
 
 export interface IWillActivateEvent {
 	readonly event: string;
-	readonly activation: Thenable<void>;
+	readonly activation: Promise<void>;
 }
 
-export interface IExtensionService {
+export interface IResponsiveStateChangeEvent {
+	target: ICpuProfilerTarget;
+	isResponsive: boolean;
+}
+
+export interface IExtensionService extends ICpuProfilerTarget {
 	_serviceBrand: any;
 
 	/**
@@ -139,7 +141,12 @@ export interface IExtensionService {
 	 * Fired when extensions status changes.
 	 * The event contains the ids of the extensions that have changed.
 	 */
-	onDidChangeExtensionsStatus: Event<string[]>;
+	onDidChangeExtensionsStatus: Event<ExtensionIdentifier[]>;
+
+	/**
+	 * Fired when the available extensions change (i.e. when extensions are added or removed).
+	 */
+	onDidChangeExtensions: Event<void>;
 
 	/**
 	 * An event that is fired when activation happens.
@@ -147,40 +154,54 @@ export interface IExtensionService {
 	onWillActivateByEvent: Event<IWillActivateEvent>;
 
 	/**
+	 * An event that is fired when an extension host changes its
+	 * responsive-state.
+	 */
+	onDidChangeResponsiveChange: Event<IResponsiveStateChangeEvent>;
+
+	/**
 	 * Send an activation event and activate interested extensions.
 	 */
-	activateByEvent(activationEvent: string): TPromise<void>;
+	activateByEvent(activationEvent: string): Promise<void>;
 
 	/**
 	 * An promise that resolves when the installed extensions are registered after
 	 * their extension points got handled.
 	 */
-	whenInstalledExtensionsRegistered(): TPromise<boolean>;
+	whenInstalledExtensionsRegistered(): Promise<boolean>;
 
 	/**
 	 * Return all registered extensions
 	 */
-	getExtensions(): TPromise<IExtensionDescription[]>;
+	getExtensions(): Promise<IExtensionDescription[]>;
+
+	/**
+	 * Return a specific extension
+	 * @param id An extension id
+	 */
+	getExtension(id: string): Promise<IExtensionDescription | undefined>;
+
+	/**
+	 * Returns `true` if the given extension can be added. Otherwise `false`.
+	 * @param extension An extension
+	 */
+	canAddExtension(extension: IExtensionDescription): boolean;
+
+	/**
+	 * Returns `true` if the given extension can be removed. Otherwise `false`.
+	 * @param extension An extension
+	 */
+	canRemoveExtension(extension: IExtensionDescription): boolean;
 
 	/**
 	 * Read all contributions to an extension point.
 	 */
-	readExtensionPointContributions<T>(extPoint: IExtensionPoint<T>): TPromise<ExtensionPointContribution<T>[]>;
+	readExtensionPointContributions<T>(extPoint: IExtensionPoint<T>): Promise<ExtensionPointContribution<T>[]>;
 
 	/**
 	 * Get information about extensions status.
 	 */
 	getExtensionsStatus(): { [id: string]: IExtensionsStatus };
-
-	/**
-	 * Check if the extension host can be profiled.
-	 */
-	canProfileExtensionHost(): boolean;
-
-	/**
-	 * Begin an extension host process profile session.
-	 */
-	startExtensionHostProfile(): TPromise<ProfileSession>;
 
 	/**
 	 * Return the inspect port or 0.
@@ -203,8 +224,21 @@ export interface IExtensionService {
 	stopExtensionHost(): void;
 }
 
+export interface ICpuProfilerTarget {
+
+	/**
+	 * Check if the extension host can be profiled.
+	 */
+	canProfileExtensionHost(): boolean;
+
+	/**
+	 * Begin an extension host process profile session.
+	 */
+	startExtensionHostProfile(): Promise<ProfileSession>;
+}
+
 export interface ProfileSession {
-	stop(): TPromise<IExtensionHostProfile>;
+	stop(): Promise<IExtensionHostProfile>;
 }
 
 export function checkProposedApiEnabled(extension: IExtensionDescription): void {
@@ -214,5 +248,38 @@ export function checkProposedApiEnabled(extension: IExtensionDescription): void 
 }
 
 export function throwProposedApiError(extension: IExtensionDescription): never {
-	throw new Error(`[${extension.id}]: Proposed API is only available when running out of dev or with the following command line switch: --enable-proposed-api ${extension.id}`);
+	throw new Error(`[${extension.identifier.value}]: Proposed API is only available when running out of dev or with the following command line switch: --enable-proposed-api ${extension.identifier.value}`);
+}
+
+export function toExtension(extensionDescription: IExtensionDescription): IExtension {
+	return {
+		type: extensionDescription.isBuiltin ? ExtensionType.System : ExtensionType.User,
+		identifier: { id: getGalleryExtensionId(extensionDescription.publisher, extensionDescription.name), uuid: extensionDescription.uuid },
+		manifest: extensionDescription,
+		location: extensionDescription.extensionLocation,
+	};
+}
+
+
+export class NullExtensionService implements IExtensionService {
+	_serviceBrand: any;
+	onDidRegisterExtensions: Event<void> = Event.None;
+	onDidChangeExtensionsStatus: Event<ExtensionIdentifier[]> = Event.None;
+	onDidChangeExtensions: Event<void> = Event.None;
+	onWillActivateByEvent: Event<IWillActivateEvent> = Event.None;
+	onDidChangeResponsiveChange: Event<IResponsiveStateChangeEvent> = Event.None;
+	activateByEvent(_activationEvent: string): Promise<void> { return Promise.resolve(undefined); }
+	whenInstalledExtensionsRegistered(): Promise<boolean> { return Promise.resolve(true); }
+	getExtensions(): Promise<IExtensionDescription[]> { return Promise.resolve([]); }
+	getExtension() { return Promise.resolve(undefined); }
+	readExtensionPointContributions<T>(_extPoint: IExtensionPoint<T>): Promise<ExtensionPointContribution<T>[]> { return Promise.resolve(Object.create(null)); }
+	getExtensionsStatus(): { [id: string]: IExtensionsStatus; } { return Object.create(null); }
+	canProfileExtensionHost(): boolean { return false; }
+	getInspectPort(): number { return 0; }
+	startExtensionHostProfile(): Promise<ProfileSession> { return Promise.resolve(Object.create(null)); }
+	restartExtensionHost(): void { }
+	startExtensionHost(): void { }
+	stopExtensionHost(): void { }
+	canAddExtension(): boolean { return false; }
+	canRemoveExtension(): boolean { return false; }
 }

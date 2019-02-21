@@ -32,7 +32,7 @@ export class MainThreadCommands implements MainThreadCommandsShape {
 		this._generateCommandsDocumentationRegistration.dispose();
 	}
 
-	private _generateCommandsDocumentation(): Thenable<void> {
+	private _generateCommandsDocumentation(): Promise<void> {
 		return this._proxy.$getContributedCommandHandlerDescriptions().then(result => {
 			// add local commands
 			const commands = CommandsRegistry.getCommands();
@@ -64,20 +64,21 @@ export class MainThreadCommands implements MainThreadCommandsShape {
 	}
 
 	$unregisterCommand(id: string): void {
-		if (this._disposables.has(id)) {
-			this._disposables.get(id).dispose();
+		const command = this._disposables.get(id);
+		if (command) {
+			command.dispose();
 			this._disposables.delete(id);
 		}
 	}
 
-	$executeCommand<T>(id: string, args: any[]): Thenable<T> {
+	$executeCommand<T>(id: string, args: any[]): Promise<T | undefined> {
 		for (let i = 0; i < args.length; i++) {
 			args[i] = revive(args[i], 0);
 		}
 		return this._commandService.executeCommand<T>(id, ...args);
 	}
 
-	$getCommands(): Thenable<string[]> {
+	$getCommands(): Promise<string[]> {
 		return Promise.resolve(Object.keys(CommandsRegistry.getCommands()));
 	}
 }

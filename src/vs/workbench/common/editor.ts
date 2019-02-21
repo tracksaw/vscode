@@ -3,8 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { TPromise } from 'vs/base/common/winjs.base';
-import { Event, Emitter, once } from 'vs/base/common/event';
+import { Event, Emitter } from 'vs/base/common/event';
 import * as objects from 'vs/base/common/objects';
 import * as types from 'vs/base/common/types';
 import { URI } from 'vs/base/common/uri';
@@ -16,11 +15,11 @@ import { RawContextKey, ContextKeyExpr } from 'vs/platform/contextkey/common/con
 import { Registry } from 'vs/platform/registry/common/platform';
 import { ITextModel } from 'vs/editor/common/model';
 import { Schemas } from 'vs/base/common/network';
-import { IEditorGroup } from 'vs/workbench/services/group/common/editorGroupsService';
+import { IEditorGroup } from 'vs/workbench/services/editor/common/editorGroupsService';
 import { ICompositeControl } from 'vs/workbench/common/composite';
 import { ActionRunner, IAction } from 'vs/base/common/actions';
 
-export const ActiveEditorContext = new RawContextKey<string>('activeEditor', null);
+export const ActiveEditorContext = new RawContextKey<string | null>('activeEditor', null);
 export const EditorsVisibleContext = new RawContextKey<boolean>('editorIsOpen', false);
 export const EditorGroupActiveEditorDirtyContext = new RawContextKey<boolean>('groupActiveEditorDirty', false);
 export const NoEditorsVisibleContext: ContextKeyExpr = EditorsVisibleContext.toNegated();
@@ -47,17 +46,17 @@ export interface IEditor {
 	/**
 	 * The assigned input of this editor.
 	 */
-	input: IEditorInput;
+	input: IEditorInput | null;
 
 	/**
 	 * The assigned options of this editor.
 	 */
-	options: IEditorOptions;
+	options: IEditorOptions | null;
 
 	/**
 	 * The assigned group this editor is showing in.
 	 */
-	group: IEditorGroup;
+	group: IEditorGroup | undefined;
 
 	/**
 	 * The minimum width of this editor.
@@ -82,7 +81,7 @@ export interface IEditor {
 	/**
 	 * An event to notify whenever minimum/maximum width/height changes.
 	 */
-	readonly onDidSizeConstraintsChange: Event<{ width: number; height: number; }>;
+	readonly onDidSizeConstraintsChange: Event<{ width: number; height: number; } | undefined>;
 
 	/**
 	 * Returns the unique identifier of this editor.
@@ -92,7 +91,7 @@ export interface IEditor {
 	/**
 	 * Returns the underlying control of this editor.
 	 */
-	getControl(): IEditorControl;
+	getControl(): IEditorControl | null;
 
 	/**
 	 * Asks the underlying control to focus.
@@ -185,13 +184,13 @@ export interface IEditorInputFactory {
 	 * Returns a string representation of the provided editor input that contains enough information
 	 * to deserialize back to the original editor input from the deserialize() method.
 	 */
-	serialize(editorInput: EditorInput): string;
+	serialize(editorInput: EditorInput): string | null;
 
 	/**
 	 * Returns an editor input from the provided serialized form of the editor input. This form matches
 	 * the value returned from the serialize() method.
 	 */
-	deserialize(instantiationService: IInstantiationService, serializedEditorInput: string): EditorInput;
+	deserialize(instantiationService: IInstantiationService, serializedEditorInput: string): EditorInput | null;
 }
 
 export interface IUntitledResourceInput extends IBaseResourceInput {
@@ -277,7 +276,7 @@ export interface IEditorInput extends IDisposable {
 	/**
 	 * Returns the associated resource of this input.
 	 */
-	getResource(): URI;
+	getResource(): URI | null;
 
 	/**
 	 * Unique type identifier for this inpput.
@@ -287,22 +286,22 @@ export interface IEditorInput extends IDisposable {
 	/**
 	 * Returns the display name of this input.
 	 */
-	getName(): string;
+	getName(): string | null;
 
 	/**
 	 * Returns the display description of this input.
 	 */
-	getDescription(verbosity?: Verbosity): string;
+	getDescription(verbosity?: Verbosity): string | null;
 
 	/**
 	 * Returns the display title of this input.
 	 */
-	getTitle(verbosity?: Verbosity): string;
+	getTitle(verbosity?: Verbosity): string | null;
 
 	/**
 	 * Resolves the input.
 	 */
-	resolve(): TPromise<IEditorModel>;
+	resolve(): Promise<IEditorModel | null>;
 
 	/**
 	 * Returns if this input is dirty or not.
@@ -312,7 +311,7 @@ export interface IEditorInput extends IDisposable {
 	/**
 	 * Reverts this input.
 	 */
-	revert(options?: IRevertOptions): TPromise<boolean>;
+	revert(options?: IRevertOptions): Promise<boolean>;
 
 	/**
 	 * Returns if the other object matches this input.
@@ -345,7 +344,7 @@ export abstract class EditorInput extends Disposable implements IEditorInput {
 	/**
 	 * Returns the associated resource of this input if any.
 	 */
-	getResource(): URI {
+	getResource(): URI | null {
 		return null;
 	}
 
@@ -353,7 +352,7 @@ export abstract class EditorInput extends Disposable implements IEditorInput {
 	 * Returns the name of this input that can be shown to the user. Examples include showing the name of the input
 	 * above the editor area when the input is shown.
 	 */
-	getName(): string {
+	getName(): string | null {
 		return null;
 	}
 
@@ -361,7 +360,7 @@ export abstract class EditorInput extends Disposable implements IEditorInput {
 	 * Returns the description of this input that can be shown to the user. Examples include showing the description of
 	 * the input above the editor area to the side of the name of the input.
 	 */
-	getDescription(verbosity?: Verbosity): string {
+	getDescription(verbosity?: Verbosity): string | null {
 		return null;
 	}
 
@@ -369,7 +368,7 @@ export abstract class EditorInput extends Disposable implements IEditorInput {
 	 * Returns the title of this input that can be shown to the user. Examples include showing the title of
 	 * the input above the editor area as hover over the input label.
 	 */
-	getTitle(verbosity?: Verbosity): string {
+	getTitle(verbosity?: Verbosity): string | null {
 		return this.getName();
 	}
 
@@ -377,7 +376,7 @@ export abstract class EditorInput extends Disposable implements IEditorInput {
 	 * Returns the preferred editor for this input. A list of candidate editors is passed in that whee registered
 	 * for the input. This allows subclasses to decide late which editor to use for the input on a case by case basis.
 	 */
-	getPreferredEditorId(candidates: string[]): string {
+	getPreferredEditorId(candidates: string[]): string | null {
 		if (candidates && candidates.length > 0) {
 			return candidates[0];
 		}
@@ -403,7 +402,7 @@ export abstract class EditorInput extends Disposable implements IEditorInput {
 	 * Returns a type of EditorModel that represents the resolved input. Subclasses should
 	 * override to provide a meaningful model.
 	 */
-	abstract resolve(): TPromise<IEditorModel>;
+	abstract resolve(): Promise<IEditorModel | null>;
 
 	/**
 	 * An editor that is dirty will be asked to be saved once it closes.
@@ -415,22 +414,22 @@ export abstract class EditorInput extends Disposable implements IEditorInput {
 	/**
 	 * Subclasses should bring up a proper dialog for the user if the editor is dirty and return the result.
 	 */
-	confirmSave(): TPromise<ConfirmResult> {
-		return TPromise.wrap(ConfirmResult.DONT_SAVE);
+	confirmSave(): Promise<ConfirmResult> {
+		return Promise.resolve(ConfirmResult.DONT_SAVE);
 	}
 
 	/**
 	 * Saves the editor if it is dirty. Subclasses return a promise with a boolean indicating the success of the operation.
 	 */
-	save(): TPromise<boolean> {
-		return TPromise.as(true);
+	save(): Promise<boolean> {
+		return Promise.resolve(true);
 	}
 
 	/**
 	 * Reverts the editor if it is dirty. Subclasses return a promise with a boolean indicating the success of the operation.
 	 */
-	revert(options?: IRevertOptions): TPromise<boolean> {
-		return TPromise.as(true);
+	revert(options?: IRevertOptions): Promise<boolean> {
+		return Promise.resolve(true);
 	}
 
 	/**
@@ -511,6 +510,8 @@ export interface IEncodingSupport {
  */
 export interface IFileEditorInput extends IEditorInput, IEncodingSupport {
 
+	getResource(): URI;
+
 	/**
 	 * Sets the preferred encodingt to use for this input.
 	 */
@@ -547,15 +548,15 @@ export class SideBySideEditorInput extends EditorInput {
 		return this.master.isDirty();
 	}
 
-	confirmSave(): TPromise<ConfirmResult> {
+	confirmSave(): Promise<ConfirmResult> {
 		return this.master.confirmSave();
 	}
 
-	save(): TPromise<boolean> {
+	save(): Promise<boolean> {
 		return this.master.save();
 	}
 
-	revert(): TPromise<boolean> {
+	revert(): Promise<boolean> {
 		return this.master.revert();
 	}
 
@@ -567,14 +568,14 @@ export class SideBySideEditorInput extends EditorInput {
 	private registerListeners(): void {
 
 		// When the details or master input gets disposed, dispose this diff editor input
-		const onceDetailsDisposed = once(this.details.onDispose);
+		const onceDetailsDisposed = Event.once(this.details.onDispose);
 		this._register(onceDetailsDisposed(() => {
 			if (!this.isDisposed()) {
 				this.dispose();
 			}
 		}));
 
-		const onceMasterDisposed = once(this.master.onDispose);
+		const onceMasterDisposed = Event.once(this.master.onDispose);
 		this._register(onceMasterDisposed(() => {
 			if (!this.isDisposed()) {
 				this.dispose();
@@ -586,8 +587,8 @@ export class SideBySideEditorInput extends EditorInput {
 		this._register(this.master.onDidChangeLabel(() => this._onDidChangeLabel.fire()));
 	}
 
-	resolve(): TPromise<EditorModel> {
-		return TPromise.as(null);
+	resolve(): Promise<EditorModel | null> {
+		return Promise.resolve(null);
 	}
 
 	getTypeId(): string {
@@ -637,8 +638,8 @@ export class EditorModel extends Disposable implements IEditorModel {
 	/**
 	 * Causes this model to load returning a promise when loading is completed.
 	 */
-	load(): TPromise<EditorModel> {
-		return TPromise.as(this);
+	load(): Promise<IEditorModel> {
+		return Promise.resolve(this);
 	}
 
 	/**
@@ -677,7 +678,7 @@ export class EditorOptions implements IEditorOptions {
 	/**
 	 * Helper to create EditorOptions inline.
 	 */
-	static create(settings: IEditorOptions): EditorOptions {
+	static create(settings: IEditorOptions): EditorOptions | null {
 		const options = new EditorOptions();
 
 		options.preserveFocus = settings.preserveFocus;
@@ -687,6 +688,7 @@ export class EditorOptions implements IEditorOptions {
 		options.pinned = settings.pinned;
 		options.index = settings.index;
 		options.inactive = settings.inactive;
+		options.ignoreError = settings.ignoreError;
 
 		return options;
 	}
@@ -695,41 +697,47 @@ export class EditorOptions implements IEditorOptions {
 	 * Tells the editor to not receive keyboard focus when the editor is being opened. By default,
 	 * the editor will receive keyboard focus on open.
 	 */
-	preserveFocus: boolean;
+	preserveFocus: boolean | undefined;
 
 	/**
 	 * Tells the editor to reload the editor input in the editor even if it is identical to the one
 	 * already showing. By default, the editor will not reload the input if it is identical to the
 	 * one showing.
 	 */
-	forceReload: boolean;
+	forceReload: boolean | undefined;
 
 	/**
 	 * Will reveal the editor if it is already opened and visible in any of the opened editor groups.
 	 */
-	revealIfVisible: boolean;
+	revealIfVisible: boolean | undefined;
 
 	/**
 	 * Will reveal the editor if it is already opened (even when not visible) in any of the opened editor groups.
 	 */
-	revealIfOpened: boolean;
+	revealIfOpened: boolean | undefined;
 
 	/**
 	 * An editor that is pinned remains in the editor stack even when another editor is being opened.
 	 * An editor that is not pinned will always get replaced by another editor that is not pinned.
 	 */
-	pinned: boolean;
+	pinned: boolean | undefined;
 
 	/**
 	 * The index in the document stack where to insert the editor into when opening.
 	 */
-	index: number;
+	index: number | undefined;
 
 	/**
 	 * An active editor that is opened will show its contents directly. Set to true to open an editor
 	 * in the background.
 	 */
-	inactive: boolean;
+	inactive: boolean | undefined;
+
+	/**
+	 * Will not show an error in case opening the editor fails and thus allows to show a custom error
+	 * message as needed. By default, an error will be presented as notification if opening was not possible.
+	 */
+	ignoreError: boolean | undefined;
 }
 
 /**
@@ -742,9 +750,9 @@ export class TextEditorOptions extends EditorOptions {
 	private endColumn: number;
 
 	private revealInCenterIfOutsideViewport: boolean;
-	private editorViewState: IEditorViewState;
+	private editorViewState: IEditorViewState | null;
 
-	static from(input?: IBaseResourceInput): TextEditorOptions {
+	static from(input?: IBaseResourceInput): TextEditorOptions | null {
 		if (!input || !input.options) {
 			return null;
 		}
@@ -793,6 +801,10 @@ export class TextEditorOptions extends EditorOptions {
 
 		if (options.inactive) {
 			textEditorOptions.inactive = true;
+		}
+
+		if (options.ignoreError) {
+			textEditorOptions.ignoreError = true;
 		}
 
 		if (typeof options.index === 'number') {
@@ -916,7 +928,7 @@ export class EditorCommandsContextActionRunner extends ActionRunner {
 		super();
 	}
 
-	run(action: IAction, context?: any): TPromise<void> {
+	run(action: IAction, context?: any): Promise<void> {
 		return super.run(action, this.context);
 	}
 }
@@ -940,6 +952,7 @@ export interface IWorkbenchEditorPartConfiguration {
 	highlightModifiedTabs?: boolean;
 	tabCloseButton?: 'left' | 'right' | 'off';
 	tabSizing?: 'fit' | 'shrink';
+	focusRecentEditorAfterClose?: boolean;
 	showIcons?: boolean;
 	enablePreview?: boolean;
 	enablePreviewFromQuickOpen?: boolean;
@@ -958,7 +971,7 @@ export interface IResourceOptions {
 	filter?: string | string[];
 }
 
-export function toResource(editor: IEditorInput, options?: IResourceOptions): URI {
+export function toResource(editor: IEditorInput, options?: IResourceOptions): URI | null {
 	if (!editor) {
 		return null;
 	}
@@ -1008,8 +1021,8 @@ export interface IEditorMemento<T> {
 	saveEditorState(group: IEditorGroup, resource: URI, state: T): void;
 	saveEditorState(group: IEditorGroup, editor: EditorInput, state: T): void;
 
-	loadEditorState(group: IEditorGroup, resource: URI): T;
-	loadEditorState(group: IEditorGroup, editor: EditorInput): T;
+	loadEditorState(group: IEditorGroup, resource: URI): T | undefined;
+	loadEditorState(group: IEditorGroup, editor: EditorInput): T | undefined;
 
 	clearEditorState(resource: URI, group?: IEditorGroup): void;
 	clearEditorState(editor: EditorInput, group?: IEditorGroup): void;

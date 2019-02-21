@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { TPromise } from 'vs/base/common/winjs.base';
 import * as nls from 'vs/nls';
 import { Action } from 'vs/base/common/actions';
 import { IQuickOpenService } from 'vs/platform/quickOpen/common/quickOpen';
@@ -20,12 +19,24 @@ export const defaultQuickOpenContext = ContextKeyExpr.and(inQuickOpenContext, Co
 export const QUICKOPEN_ACTION_ID = 'workbench.action.quickOpen';
 export const QUICKOPEN_ACION_LABEL = nls.localize('quickOpen', "Go to File...");
 
-CommandsRegistry.registerCommand(QUICKOPEN_ACTION_ID, function (accessor: ServicesAccessor, prefix: string | null = null) {
-	const quickOpenService = accessor.get(IQuickOpenService);
+CommandsRegistry.registerCommand({
+	id: QUICKOPEN_ACTION_ID,
+	handler: function (accessor: ServicesAccessor, prefix: string | null = null) {
+		const quickOpenService = accessor.get(IQuickOpenService);
 
-	return quickOpenService.show(typeof prefix === 'string' ? prefix : undefined).then(() => {
-		return void 0;
-	});
+		return quickOpenService.show(typeof prefix === 'string' ? prefix : undefined).then(() => {
+			return undefined;
+		});
+	},
+	description: {
+		description: `Quick open`,
+		args: [{
+			name: 'prefix',
+			schema: {
+				'type': 'string'
+			}
+		}]
+	}
 });
 
 export const QUICKOPEN_FOCUS_SECONDARY_ACTION_ID = 'workbench.action.quickOpenPreviousEditor';
@@ -33,7 +44,7 @@ CommandsRegistry.registerCommand(QUICKOPEN_FOCUS_SECONDARY_ACTION_ID, function (
 	const quickOpenService = accessor.get(IQuickOpenService);
 
 	return quickOpenService.show(undefined, { autoFocus: { autoFocusSecondEntry: true } }).then(() => {
-		return void 0;
+		return undefined;
 	});
 });
 
@@ -44,16 +55,16 @@ export class BaseQuickOpenNavigateAction extends Action {
 		label: string,
 		private next: boolean,
 		private quickNavigate: boolean,
-		@IQuickOpenService private quickOpenService: IQuickOpenService,
-		@IQuickInputService private quickInputService: IQuickInputService,
-		@IKeybindingService private keybindingService: IKeybindingService
+		@IQuickOpenService private readonly quickOpenService: IQuickOpenService,
+		@IQuickInputService private readonly quickInputService: IQuickInputService,
+		@IKeybindingService private readonly keybindingService: IKeybindingService
 	) {
 		super(id, label);
 	}
 
-	run(event?: any): TPromise<any> {
+	run(event?: any): Promise<any> {
 		const keys = this.keybindingService.lookupKeybindings(this.id);
-		const quickNavigate = this.quickNavigate ? { keybindings: keys } : void 0;
+		const quickNavigate = this.quickNavigate ? { keybindings: keys } : undefined;
 
 		this.quickOpenService.navigate(this.next, quickNavigate);
 		this.quickInputService.navigate(this.next, quickNavigate);

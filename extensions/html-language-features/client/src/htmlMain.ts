@@ -8,11 +8,12 @@ import * as fs from 'fs';
 import * as nls from 'vscode-nls';
 const localize = nls.loadMessageBundle();
 
-import { languages, ExtensionContext, IndentAction, Position, TextDocument, Range, CompletionItem, CompletionItemKind, SnippetString } from 'vscode';
+import { languages, ExtensionContext, IndentAction, Position, TextDocument, Range, CompletionItem, CompletionItemKind, SnippetString, workspace, SelectionRange, SelectionRangeKind } from 'vscode';
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind, RequestType, TextDocumentPositionParams } from 'vscode-languageclient';
 import { EMPTY_ELEMENTS } from './htmlEmptyTagsShared';
 import { activateTagClosing } from './tagClosing';
 import TelemetryReporter from 'vscode-extension-telemetry';
+import { getCustomDataPathsInAllWorkspaces, getCustomDataPathsFromAllExtensions } from './customData';
 
 namespace TagCloseRequest {
 	export const type: RequestType<TextDocumentPositionParams, string, any, any> = new RequestType('html/tag');
@@ -49,6 +50,11 @@ export function activate(context: ExtensionContext) {
 	let documentSelector = ['html', 'handlebars', 'razor'];
 	let embeddedLanguages = { css: true, javascript: true };
 
+	let dataPaths = [
+		...getCustomDataPathsInAllWorkspaces(workspace.workspaceFolders),
+		...getCustomDataPathsFromAllExtensions()
+	];
+
 	// Options to control the language client
 	let clientOptions: LanguageClientOptions = {
 		documentSelector,
@@ -56,7 +62,8 @@ export function activate(context: ExtensionContext) {
 			configurationSection: ['html', 'css', 'javascript'], // the settings to synchronize
 		},
 		initializationOptions: {
-			embeddedLanguages
+			embeddedLanguages,
+			dataPaths
 		}
 	};
 
@@ -80,6 +87,26 @@ export function activate(context: ExtensionContext) {
 			}
 		});
 		toDispose.push(disposable);
+
+		documentSelector.forEach(selector => {
+			context.subscriptions.push(languages.registerSelectionRangeProvider(selector, {
+				async provideSelectionRanges(document: TextDocument, positions: Position[]): Promise<SelectionRange[][]> {
+					const textDocument = client.code2ProtocolConverter.asTextDocumentIdentifier(document);
+					return Promise.all(positions.map(async position => {
+						const rawRanges = await client.sendRequest<Range[]>('$/textDocument/selectionRange', { textDocument, position });
+						if (Array.isArray(rawRanges)) {
+							return rawRanges.map(r => {
+								return {
+									range: client.protocol2CodeConverter.asRange(r),
+									kind: SelectionRangeKind.Declaration
+								};
+							});
+						}
+						return [];
+					}));
+				}
+			}));
+		});
 	});
 
 	languages.setLanguageConfiguration('html', {

@@ -10,7 +10,7 @@ import { CharCode } from 'vs/base/common/charCode';
  */
 export const empty = '';
 
-export function isFalsyOrWhitespace(str: string): boolean {
+export function isFalsyOrWhitespace(str: string | undefined): boolean {
 	if (!str || typeof str !== 'string') {
 		return true;
 	}
@@ -56,7 +56,7 @@ export function format(value: string, ...args: any[]): string {
  * being used e.g. in HTMLElement.innerHTML.
  */
 export function escape(html: string): string {
-	return html.replace(/[<|>|&]/g, function (match) {
+	return html.replace(/[<>&]/g, function (match) {
 		switch (match) {
 			case '<': return '&lt;';
 			case '>': return '&gt;';
@@ -78,7 +78,7 @@ export function escapeRegExpCharacters(value: string): string {
  * @param haystack string to trim
  * @param needle the thing to trim (default is a blank)
  */
-export function trim(haystack: string, needle: string = ' '): string | undefined {
+export function trim(haystack: string, needle: string = ' '): string {
 	let trimmed = ltrim(haystack, needle);
 	return rtrim(trimmed, needle);
 }
@@ -188,6 +188,7 @@ export interface RegExpOptions {
 	wholeWord?: boolean;
 	multiline?: boolean;
 	global?: boolean;
+	unicode?: boolean;
 }
 
 export function createRegExp(searchString: string, isRegex: boolean, options: RegExpOptions = {}): RegExp {
@@ -215,6 +216,9 @@ export function createRegExp(searchString: string, isRegex: boolean, options: Re
 	if (options.multiline) {
 		modifiers += 'm';
 	}
+	if (options.unicode) {
+		modifiers += 'u';
+	}
 
 	return new RegExp(searchString, modifiers);
 }
@@ -234,6 +238,13 @@ export function regExpLeadsToEndlessLoop(regexp: RegExp): boolean {
 
 export function regExpContainsBackreference(regexpValue: string): boolean {
 	return !!regexpValue.match(/([^\\]|^)(\\\\)*\\\d+/);
+}
+
+export function regExpFlags(regexp: RegExp): string {
+	return (regexp.global ? 'g' : '')
+		+ (regexp.ignoreCase ? 'i' : '')
+		+ (regexp.multiline ? 'm' : '')
+		+ ((regexp as any).unicode ? 'u' : '');
 }
 
 /**
@@ -615,6 +626,21 @@ export function removeAnsiEscapeCodes(str: string): string {
 
 	return str;
 }
+
+export const removeAccents: (str: string) => string = (function () {
+	if (typeof (String.prototype as any).normalize !== 'function') {
+		// ☹️ no ES6 features...
+		return function (str: string) { return str; };
+	} else {
+		// transform into NFD form and remove accents
+		// see: https://stackoverflow.com/questions/990904/remove-accents-diacritics-in-a-string-in-javascript/37511463#37511463
+		const regex = /[\u0300-\u036f]/g;
+		return function (str: string) {
+			return (str as any).normalize('NFD').replace(regex, empty);
+		};
+	}
+})();
+
 
 // -- UTF-8 BOM
 

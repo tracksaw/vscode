@@ -15,6 +15,7 @@ import { IEditorOptions } from 'vs/editor/common/config/editorOptions';
 import { BareFontInfo, FontInfo } from 'vs/editor/common/config/fontInfo';
 import { IDimension } from 'vs/editor/common/editorCommon';
 import { IStorageService, StorageScope } from 'vs/platform/storage/common/storage';
+import { IAccessibilityService } from 'vs/platform/accessibility/common/accessibility';
 
 class CSSBasedConfigurationCache {
 
@@ -76,7 +77,9 @@ export function restoreFontInfo(storageService: IStorageService): void {
 
 export function saveFontInfo(storageService: IStorageService): void {
 	let knownFontInfo = CSSBasedConfiguration.INSTANCE.saveFontInfo();
-	storageService.store('editorFontInfo', JSON.stringify(knownFontInfo), StorageScope.GLOBAL);
+	if (knownFontInfo.length > 0) {
+		storageService.store('editorFontInfo', JSON.stringify(knownFontInfo), StorageScope.GLOBAL);
+	}
 }
 
 export interface ISerializedFontInfo {
@@ -308,7 +311,7 @@ export class Configuration extends CommonEditorConfiguration {
 
 	private readonly _elementSizeObserver: ElementSizeObserver;
 
-	constructor(options: IEditorOptions, referenceDomElement: HTMLElement | null = null) {
+	constructor(options: IEditorOptions, referenceDomElement: HTMLElement | null = null, private readonly accessibilityService: IAccessibilityService) {
 		super(options);
 
 		this._elementSizeObserver = this._register(new ElementSizeObserver(referenceDomElement, () => this._onReferenceDomElementSizeChanged()));
@@ -320,7 +323,7 @@ export class Configuration extends CommonEditorConfiguration {
 		}
 
 		this._register(browser.onDidChangeZoomLevel(_ => this._recomputeOptions()));
-		this._register(browser.onDidChangeAccessibilitySupport(() => this._recomputeOptions()));
+		this._register(this.accessibilityService.onDidChangeAccessibilitySupport(() => this._recomputeOptions()));
 
 		this._recomputeOptions();
 	}
@@ -343,14 +346,9 @@ export class Configuration extends CommonEditorConfiguration {
 
 	private _getExtraEditorClassName(): string {
 		let extra = '';
-		if (browser.isIE) {
-			extra += 'ie ';
-		} else if (browser.isFirefox) {
-			extra += 'ff ';
-		} else if (browser.isEdge) {
-			extra += 'edge ';
-		} else if (browser.isSafari) {
-			extra += 'safari ';
+		if (!browser.isSafari && !browser.isWebkitWebView) {
+			// Use user-select: none in all browsers except Safari and native macOS WebView
+			extra += 'no-user-select ';
 		}
 		if (platform.isMacintosh) {
 			extra += 'mac ';
@@ -366,7 +364,7 @@ export class Configuration extends CommonEditorConfiguration {
 			emptySelectionClipboard: browser.isWebKit || browser.isFirefox,
 			pixelRatio: browser.getPixelRatio(),
 			zoomLevel: browser.getZoomLevel(),
-			accessibilitySupport: browser.getAccessibilitySupport()
+			accessibilitySupport: this.accessibilityService.getAccessibilitySupport()
 		};
 	}
 

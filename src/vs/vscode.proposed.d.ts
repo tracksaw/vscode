@@ -3,50 +3,132 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// This is the place for API experiments and proposals.
+/**
+ * This is the place for API experiments and proposals.
+ * These API are NOT stable and subject to change. They are only available in the Insiders
+ * distribution and CANNOT be used in published extensions.
+ *
+ * To test these API in local environment:
+ * - Use Insiders release of VS Code.
+ * - Add `"enableProposedApi": true` to your package.json.
+ * - Copy this file to your project.
+ */
 
 declare module 'vscode' {
 
-	export namespace window {
-		export function sampleFunction(): Thenable<any>;
+	//#region Alex - resolvers
+
+	export class ResolvedAuthority {
+		readonly host: string;
+		readonly port: number;
+		debugListenPort?: number;
+		debugConnectPort?: number;
+
+		constructor(host: string, port: number);
 	}
 
-	//#region Joh - https://github.com/Microsoft/vscode/issues/57093
-
-	/**
-	 * An insert text rule defines how the [`insertText`](#CompletionItem.insertText) of a
-	 * completion item should be modified.
-	 */
-	export enum CompletionItemInsertTextRule {
-
-		/**
-		 * Keep whitespace as is. By default, the editor adjusts leading
-		 * whitespace of new lines so that they match the indentation of
-		 * the line for which the item is accepeted.
-		 */
-		KeepWhitespace = 0b01
+	export interface RemoteAuthorityResolver {
+		resolve(authority: string): ResolvedAuthority | Thenable<ResolvedAuthority>;
 	}
 
-	export interface CompletionItem {
+	export interface ResourceLabelFormatter {
+		scheme: string;
+		authority?: string;
+		formatting: ResourceLabelFormatting;
+	}
 
-		/**
-		 * Rules about how/if the `insertText` should be modified by the
-		 * editor. Can be a bit mask of many rules.
-		 */
-		insertTextRules?: CompletionItemInsertTextRule;
+	export interface ResourceLabelFormatting {
+		label: string; // myLabel:/${path}
+		separator: '/' | '\\' | '';
+		tildify?: boolean;
+		normalizeDriveLetter?: boolean;
+		workspaceSuffix?: string;
+		authorityPrefix?: string;
+	}
+
+	export namespace workspace {
+		export function registerRemoteAuthorityResolver(authorityPrefix: string, resolver: RemoteAuthorityResolver): Disposable;
+		export function registerResourceLabelFormatter(formatter: ResourceLabelFormatter): Disposable;
 	}
 
 	//#endregion
 
-	//#region Joh - clipboard https://github.com/Microsoft/vscode/issues/217
 
-	export interface Clipboard {
-		readText(): Thenable<string>;
-		writeText(value: string): Thenable<void>;
+	// #region Joh - code insets
+
+	/**
+	 */
+	export class CodeInset {
+		range: Range;
+		height?: number;
+		constructor(range: Range, height?: number);
 	}
 
-	export namespace env {
-		export const clipboard: Clipboard;
+	export interface CodeInsetProvider {
+		onDidChangeCodeInsets?: Event<void>;
+		provideCodeInsets(document: TextDocument, token: CancellationToken): ProviderResult<CodeInset[]>;
+		resolveCodeInset(codeInset: CodeInset, webview: Webview, token: CancellationToken): ProviderResult<CodeInset>;
+	}
+
+	export namespace languages {
+
+		/**
+		 * Register a code inset provider.
+		 *
+		 */
+		export function registerCodeInsetProvider(selector: DocumentSelector, provider: CodeInsetProvider): Disposable;
+	}
+
+	//#endregion
+
+
+	//#region Joh - selection range provider
+
+	export class SelectionRangeKind {
+
+		/**
+		 * Empty Kind.
+		 */
+		static readonly Empty: SelectionRangeKind;
+
+		/**
+		 * The statement kind, its value is `statement`, possible extensions can be
+		 * `statement.if` etc
+		 */
+		static readonly Statement: SelectionRangeKind;
+
+		/**
+		 * The declaration kind, its value is `declaration`, possible extensions can be
+		 * `declaration.function`, `declaration.class` etc.
+		 */
+		static readonly Declaration: SelectionRangeKind;
+
+		readonly value: string;
+
+		private constructor(value: string);
+
+		append(value: string): SelectionRangeKind;
+	}
+
+	export class SelectionRange {
+		kind: SelectionRangeKind;
+		range: Range;
+		constructor(range: Range, kind: SelectionRangeKind);
+	}
+
+	export interface SelectionRangeProvider {
+		/**
+		 * Provide selection ranges for the given positions. Selection ranges should be computed individually and
+		 * independend for each postion. The editor will merge and deduplicate ranges but providers must return sequences
+		 * of ranges (per position) where a range must [contain](#Range.contains) and subsequent ranges.
+		 *
+		 * todo@joh
+		 */
+		provideSelectionRanges(document: TextDocument, positions: Position[], token: CancellationToken): ProviderResult<SelectionRange[][]>;
+	}
+
+	export namespace languages {
+		export function registerSelectionRangeProvider(selector: DocumentSelector, provider: SelectionRangeProvider): Disposable;
 	}
 
 	//#endregion
@@ -54,7 +136,8 @@ declare module 'vscode' {
 	//#region Joh - read/write in chunks
 
 	export interface FileSystemProvider {
-		open?(resource: Uri): number | Thenable<number>;
+		seperator?: '/' | '\\';
+		open?(resource: Uri, options: { create: boolean }): number | Thenable<number>;
 		close?(fd: number): void | Thenable<void>;
 		read?(fd: number, pos: number, data: Uint8Array, offset: number, length: number): number | Thenable<number>;
 		write?(fd: number, pos: number, data: Uint8Array, offset: number, length: number): number | Thenable<number>;
@@ -224,7 +307,13 @@ declare module 'vscode' {
 		/**
 		 * The maximum number of results to be returned.
 		 */
-		maxResults: number;
+		maxResults?: number;
+
+		/**
+		 * A CancellationToken that represents the session for this search query. If the provider chooses to, this object can be used as the key for a cache,
+		 * and searches with the same session object can search the same cache. When the token is cancelled, the session is complete and the cache can be cleared.
+		 */
+		session?: CancellationToken;
 	}
 
 	/**
@@ -535,136 +624,12 @@ declare module 'vscode' {
 
 	//#region André: debug
 
-	/**
-	 * Represents a debug adapter executable and optional arguments passed to it.
-	 */
-	export class DebugAdapterExecutable {
-
-		readonly type: 'executable';
-
-		/**
-		 * The command path of the debug adapter executable.
-		 * A command must be either an absolute path or the name of an executable looked up via the PATH environment variable.
-		 * The special value 'node' will be mapped to VS Code's built-in node runtime.
-		 */
-		readonly command: string;
-
-		/**
-		 * Optional arguments passed to the debug adapter executable.
-		 */
-		readonly args: string[];
-
-		/**
-		 * The additional environment of the executed program or shell. If omitted
-		 * the parent process' environment is used. If provided it is merged with
-		 * the parent process' environment.
-		 */
-		readonly env?: { [key: string]: string };
-
-		/**
-		 * The working directory for the debug adapter.
-		 */
-		readonly cwd?: string;
-
-		/**
-		 * Create a description for a debug adapter based on an executable program.
-		 */
-		constructor(command: string, args?: string[], env?: { [key: string]: string }, cwd?: string);
-	}
-
-	/**
-	 * Represents a debug adapter running as a socket based server.
-	 */
-	export class DebugAdapterServer {
-
-		readonly type: 'server';
-
-		/**
-		 * The port.
-		 */
-		readonly port: number;
-
-		/**
-		 * The host.
-		 */
-		readonly host?: string;
-
-		/**
-		 * Create a description for a debug adapter running as a socket based server.
-		 */
-		constructor(port: number, host?: string);
-	}
-
-	/**
-	 * Represents a debug adapter that is implemented in the extension.
-	 */
-	export class DebugAdapterImplementation {
-
-		readonly type: 'implementation';
-
-		readonly implementation: any;
-
-		/**
-		 * Create a description for a debug adapter directly implemented in the extension.
-		 * The implementation's "type": TBD
-		 */
-		constructor(implementation: any);
-	}
-
-	export type DebugAdapterDescriptor = DebugAdapterExecutable | DebugAdapterServer | DebugAdapterImplementation;
-
-	/**
-	 * A Debug Adapter Tracker is a means to track the communication between VS Code and a Debug Adapter.
-	 */
-	export interface DebugAdapterTracker {
-		// VS Code -> Debug Adapter
-		startDebugAdapter?(): void;
-		toDebugAdapter?(message: any): void;
-		stopDebugAdapter?(): void;
-
-		// Debug Adapter -> VS Code
-		fromDebugAdapter?(message: any): void;
-		debugAdapterError?(error: Error): void;
-		debugAdapterExit?(code?: number, signal?: string): void;
-	}
+	// deprecated
 
 	export interface DebugConfigurationProvider {
 		/**
-		 * The optional method 'provideDebugAdapter' is called at the start of a debug session to provide details about the debug adapter to use.
-		 * These details must be returned as objects of type DebugAdapterDescriptor.
-		 * Currently two types of debug adapters are supported:
-		 * - a debug adapter executable specified as a command path and arguments (see DebugAdapterExecutable),
-		 * - a debug adapter server reachable via a communication port (see DebugAdapterServer).
-		 * If the method is not implemented the default behavior is this:
-		 *   provideDebugAdapter(session: DebugSession, folder: WorkspaceFolder | undefined, executable: DebugAdapterExecutable, config: DebugConfiguration, token?: CancellationToken) {
-		 *      if (typeof config.debugServer === 'number') {
-		 *         return new DebugAdapterServer(config.debugServer);
-		 *      }
-		 * 		return executable;
-		 *   }
-		 * An extension is only allowed to register a DebugConfigurationProvider with a provideDebugAdapter method if the extension defines the debug type. Otherwise an error is thrown.
-		 * Registering more than one DebugConfigurationProvider with a provideDebugAdapter method for a type results in an error.
-		 * @param session The [debug session](#DebugSession) for which the debug adapter will be used.
-		 * @param folder The workspace folder from which the configuration originates from or undefined for a folderless setup.
-		 * @param executable The debug adapter's executable information as specified in the package.json (or undefined if no such information exists).
-		 * @param config The resolved debug configuration.
-		 * @param token A cancellation token.
-		 * @return a [debug adapter's descriptor](#DebugAdapterDescriptor) or undefined.
-		 */
-		provideDebugAdapter?(session: DebugSession, folder: WorkspaceFolder | undefined, executable: DebugAdapterExecutable | undefined, config: DebugConfiguration, token?: CancellationToken): ProviderResult<DebugAdapterDescriptor>;
-
-		/**
-		 * The optional method 'provideDebugAdapterTracker' is called at the start of a debug session to provide a tracker that gives access to the communication between VS Code and a Debug Adapter.
-		 * @param session The [debug session](#DebugSession) for which the tracker will be used.
-		 * @param folder The workspace folder from which the configuration originates from or undefined for a folderless setup.
-		 * @param config The resolved debug configuration.
-		 * @param token A cancellation token.
-		 */
-		provideDebugAdapterTracker?(session: DebugSession, folder: WorkspaceFolder | undefined, config: DebugConfiguration, token?: CancellationToken): ProviderResult<DebugAdapterTracker>;
-
-		/**
-		 * Deprecated, use DebugConfigurationProvider.provideDebugAdapter instead.
-		 * @deprecated Use DebugConfigurationProvider.provideDebugAdapter instead
+		 * Deprecated, use DebugAdapterDescriptorFactory.provideDebugAdapter instead.
+		 * @deprecated Use DebugAdapterDescriptorFactory.createDebugAdapterDescriptor instead
 		 */
 		debugAdapterExecutable?(folder: WorkspaceFolder | undefined, token?: CancellationToken): ProviderResult<DebugAdapterExecutable>;
 	}
@@ -775,8 +740,8 @@ declare module 'vscode' {
 	export interface SourceControlInputBox {
 
 		/**
-		* Whether the input box is visible.
-		*/
+			* Controls whether the input box is visible (default is `true`).
+			*/
 		visible: boolean;
 	}
 
@@ -797,6 +762,11 @@ declare module 'vscode' {
 		 * The ranges of the document which support commenting.
 		 */
 		commentingRanges?: Range[];
+
+		/**
+		 * If it's in draft mode or not
+		 */
+		inDraftMode?: boolean;
 	}
 
 	export enum CommentThreadCollapsibleState {
@@ -891,6 +861,9 @@ declare module 'vscode' {
 		 * The command to be executed if the comment is selected in the Comments Panel
 		 */
 		command?: Command;
+
+		isDraft?: boolean;
+		commentReactions?: CommentReaction[];
 	}
 
 	export interface CommentThreadChangedEvent {
@@ -908,6 +881,18 @@ declare module 'vscode' {
 		 * Changed comment threads.
 		 */
 		readonly changed: CommentThread[];
+
+		/**
+		 * Changed draft mode
+		 */
+		readonly inDraftMode: boolean;
+	}
+
+	interface CommentReaction {
+		readonly label?: string;
+		readonly iconPath?: string | Uri;
+		count?: number;
+		readonly hasReacted?: boolean;
 	}
 
 	interface DocumentCommentProvider {
@@ -936,6 +921,18 @@ declare module 'vscode' {
 		 */
 		deleteComment?(document: TextDocument, comment: Comment, token: CancellationToken): Promise<void>;
 
+		startDraft?(document: TextDocument, token: CancellationToken): Promise<void>;
+		deleteDraft?(document: TextDocument, token: CancellationToken): Promise<void>;
+		finishDraft?(document: TextDocument, token: CancellationToken): Promise<void>;
+
+		startDraftLabel?: string;
+		deleteDraftLabel?: string;
+		finishDraftLabel?: string;
+
+		addReaction?(document: TextDocument, comment: Comment, reaction: CommentReaction): Promise<void>;
+		deleteReaction?(document: TextDocument, comment: Comment, reaction: CommentReaction): Promise<void>;
+		reactionGroup?: CommentReaction[];
+
 		/**
 		 * Notify of updates to comment threads.
 		 */
@@ -963,13 +960,41 @@ declare module 'vscode' {
 
 	//#region Terminal
 
+	/**
+	 * An [event](#Event) which fires when a [Terminal](#Terminal)'s dimensions change.
+	 */
+	export interface TerminalDimensionsChangeEvent {
+		/**
+		 * The [terminal](#Terminal) for which the dimensions have changed.
+		 */
+		readonly terminal: Terminal;
+		/**
+		 * The new value for the [terminal's dimensions](#Terminal.dimensions).
+		 */
+		readonly dimensions: TerminalDimensions;
+	}
+
+	namespace window {
+		/**
+		 * An event which fires when the [dimensions](#Terminal.dimensions) of the terminal change.
+		 */
+		export const onDidChangeTerminalDimensions: Event<TerminalDimensionsChangeEvent>;
+	}
+
 	export interface Terminal {
+		/**
+		 * The current dimensions of the terminal. This will be `undefined` immediately after the
+		 * terminal is created as the dimensions are not known until shortly after the terminal is
+		 * created.
+		 */
+		readonly dimensions: TerminalDimensions | undefined;
+
 		/**
 		 * Fires when the terminal's pty slave pseudo-device is written to. In other words, this
 		 * provides access to the raw data stream from the process running within the terminal,
 		 * including VT sequences.
 		 */
-		onDidWriteData: Event<string>;
+		readonly onDidWriteData: Event<string>;
 	}
 
 	/**
@@ -990,7 +1015,7 @@ declare module 'vscode' {
 	/**
 	 * Represents a terminal without a process where all interaction and output in the terminal is
 	 * controlled by an extension. This is similar to an output window but has the same VT sequence
-	 * compatility as the regular terminal.
+	 * compatibility as the regular terminal.
 	 *
 	 * Note that an instance of [Terminal](#Terminal) will be created when a TerminalRenderer is
 	 * created with all its APIs available for use by extensions. When using the Terminal object
@@ -1038,7 +1063,7 @@ declare module 'vscode' {
 		readonly maximumDimensions: TerminalDimensions | undefined;
 
 		/**
-		 * The corressponding [Terminal](#Terminal) for this TerminalRenderer.
+		 * The corresponding [Terminal](#Terminal) for this TerminalRenderer.
 		 */
 		readonly terminal: Terminal;
 
@@ -1070,9 +1095,9 @@ declare module 'vscode' {
 		 * ```typescript
 		 * const terminalRenderer = window.createTerminalRenderer('test');
 		 * terminalRenderer.onDidAcceptInput(data => {
-		 *   cosole.log(data); // 'Hello world'
+		 *   console.log(data); // 'Hello world'
 		 * });
-		 * terminalRenderer.terminal.then(t => t.sendText('Hello world'));
+		 * terminalRenderer.terminal.sendText('Hello world');
 		 * ```
 		 */
 		readonly onDidAcceptInput: Event<string>;
@@ -1121,72 +1146,6 @@ declare module 'vscode' {
 	}
 	//#endregion
 
-	//#region Signature Help
-	/**
-	 * How a [Signature provider](#SignatureHelpProvider) was triggered
-	 */
-	export enum SignatureHelpTriggerReason {
-		/**
-		 * Signature help was invoked manually by the user or by a command.
-		 */
-		Invoke = 1,
-
-		/**
-		 * Signature help was triggered by a trigger character.
-		 */
-		TriggerCharacter = 2,
-
-		/**
-		 * Signature help was triggered by the cursor moving or by the document content changing.
-		 */
-		ContentChange = 3,
-	}
-
-	/**
-	 * Contains additional information about the context in which a
-	 * [signature help provider](#SignatureHelpProvider.provideSignatureHelp) is triggered.
-	 */
-	export interface SignatureHelpContext {
-		/**
-		 * Action that caused signature help to be requested.
-		 */
-		readonly triggerReason: SignatureHelpTriggerReason;
-
-		/**
-		 * Character that caused signature help to be requested.
-		 *
-		 * This is `undefined` when signature help is not triggered by typing, such as when invoking signature help
-		 * or when moving the cursor.
-		 */
-		readonly triggerCharacter?: string;
-
-		/**
-		 * Whether or not signature help was previously showing when triggered.
-		 *
-		 * Retriggers occur when the signature help is already active and can be caused by typing a trigger character
-		 * or by a cursor move.
-		 */
-		readonly isRetrigger: boolean;
-	}
-
-	export interface SignatureHelpProvider {
-		provideSignatureHelp(document: TextDocument, position: Position, token: CancellationToken, context: SignatureHelpContext): ProviderResult<SignatureHelp>;
-	}
-
-	export interface SignatureHelpProviderMetadata {
-		readonly triggerCharacters: ReadonlyArray<string>;
-		readonly retriggerCharacters: ReadonlyArray<string>;
-	}
-
-	namespace languages {
-		export function registerSignatureHelpProvider(
-			selector: DocumentSelector,
-			provider: SignatureHelpProvider,
-			metadata: SignatureHelpProviderMetadata
-		): Disposable;
-	}
-	//#endregion
-
 	//#region Alex - OnEnter enhancement
 	export interface OnEnterRule {
 		/**
@@ -1198,25 +1157,12 @@ declare module 'vscode' {
 
 	//#region Tree View
 
-	/**
-	 * Options for creating a [TreeView](#TreeView]
-	 */
-	export interface TreeViewOptions<T> {
+	export interface TreeView<T> {
 
 		/**
-		 * A data provider that provides tree data.
+		 * An optional human-readable message that will be rendered in the view.
 		 */
-		treeDataProvider: TreeDataProvider<T>;
-
-		/**
-		 * Whether to show collapse all action or not.
-		 */
-		showCollapseAll?: boolean;
-	}
-
-	namespace window {
-
-		export function createTreeView<T>(viewId: string, options: TreeViewOptions<T>): TreeView<T>;
+		message?: string | MarkdownString;
 
 	}
 
@@ -1231,7 +1177,7 @@ declare module 'vscode' {
 		label: string;
 
 		/**
-		 * Ranges in the label to highlight. A range is Defined as a tuple of two number where the
+		 * Ranges in the label to highlight. A range is defined as a tuple of two number where the
 		 * first is the inclusive start index and the second the exclusive end index
 		 */
 		highlights?: [number, number][];
@@ -1252,16 +1198,12 @@ declare module 'vscode' {
 	}
 	//#endregion
 
-	//#region Task
-	/**
-	 * Controls how the task is presented in the UI.
-	 */
+	//#region Tasks
 	export interface TaskPresentationOptions {
 		/**
-		 * Controls whether the terminal is cleared before executing the task.
+		 * Controls whether the task is executed in a specific terminal group using split panes.
 		 */
-		clear?: boolean;
+		group?: string;
 	}
 	//#endregion
-
 }

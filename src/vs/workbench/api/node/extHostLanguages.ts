@@ -20,13 +20,14 @@ export class ExtHostLanguages {
 		this._documents = documents;
 	}
 
-	getLanguages(): Thenable<string[]> {
+	getLanguages(): Promise<string[]> {
 		return this._proxy.$getLanguages();
 	}
 
-	changeLanguage(uri: vscode.Uri, languageId: string): Thenable<vscode.TextDocument> {
+	changeLanguage(uri: vscode.Uri, languageId: string): Promise<vscode.TextDocument | undefined> {
 		return this._proxy.$changeLanguage(uri, languageId).then(() => {
-			return this._documents.getDocumentData(uri).document;
+			const data = this._documents.getDocumentData(uri);
+			return data ? data.document : undefined;
 		});
 	}
 }

@@ -6,13 +6,13 @@
 import * as assert from 'assert';
 import { CancellationTokenSource } from 'vs/base/common/cancellation';
 import { URI } from 'vs/base/common/uri';
-import { ITextQuery, QueryType } from 'vs/platform/search/common/search';
+import { ITextQuery, QueryType } from 'vs/workbench/services/search/common/search';
 import { TextSearchManager } from 'vs/workbench/services/search/node/textSearchManager';
 import * as vscode from 'vscode';
 
 suite('TextSearchManager', () => {
 	test('fixes encoding', async () => {
-		let correctEncoding: boolean;
+		let correctEncoding = false;
 		const provider: vscode.TextSearchProvider = {
 			provideTextSearchResults(query: vscode.TextSearchQuery, options: vscode.TextSearchOptions, progress: vscode.Progress<vscode.TextSearchResult>, token: vscode.CancellationToken): vscode.ProviderResult<vscode.TextSearchComplete> {
 				correctEncoding = options.encoding === 'windows-1252';

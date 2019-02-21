@@ -22,6 +22,7 @@ import { ILinkComputerTarget, computeLinks } from 'vs/editor/common/modes/linkCo
 import { BasicInplaceReplace } from 'vs/editor/common/modes/supports/inplaceReplaceSupport';
 import { IDiffComputationResult } from 'vs/editor/common/services/editorWorkerService';
 import { createMonacoBaseAPI } from 'vs/editor/common/standalone/standaloneBase';
+import { getAllPropertyNames } from 'vs/base/common/types';
 
 export interface IMirrorModel {
 	readonly uri: URI;
@@ -425,8 +426,8 @@ export abstract class BaseEditorSimpleWorker {
 				lastEol = eol;
 			}
 
-			if (!range) {
-				// eol-change only
+			if (Range.isEmpty(range) && !text) {
+				// empty change
 				continue;
 			}
 
@@ -463,7 +464,7 @@ export abstract class BaseEditorSimpleWorker {
 		}
 
 		if (typeof lastEol === 'number') {
-			result.push({ eol: lastEol, text: undefined, range: undefined });
+			result.push({ eol: lastEol, text: '', range: { startLineNumber: 0, startColumn: 0, endLineNumber: 0, endColumn: 0 } });
 		}
 
 		return Promise.resolve(result);
@@ -599,7 +600,7 @@ export abstract class BaseEditorSimpleWorker {
 			this._foreignModule = this._foreignModuleFactory(ctx, createData);
 			// static foreing module
 			let methods: string[] = [];
-			for (let prop in this._foreignModule) {
+			for (const prop of getAllPropertyNames(this._foreignModule)) {
 				if (typeof this._foreignModule[prop] === 'function') {
 					methods.push(prop);
 				}
@@ -612,7 +613,7 @@ export abstract class BaseEditorSimpleWorker {
 				this._foreignModule = foreignModule.create(ctx, createData);
 
 				let methods: string[] = [];
-				for (let prop in this._foreignModule) {
+				for (const prop of getAllPropertyNames(this._foreignModule)) {
 					if (typeof this._foreignModule[prop] === 'function') {
 						methods.push(prop);
 					}

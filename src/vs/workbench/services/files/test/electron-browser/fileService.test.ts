@@ -4,11 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as fs from 'fs';
-import * as path from 'path';
+import * as path from 'vs/base/common/path';
 import * as os from 'os';
 import * as assert from 'assert';
-
-import { TPromise } from 'vs/base/common/winjs.base';
 import { FileService } from 'vs/workbench/services/files/electron-browser/fileService';
 import { FileOperation, FileOperationEvent, FileChangesEvent, FileOperationResult, FileOperationError } from 'vs/platform/files/common/files';
 import { URI as uri } from 'vs/base/common/uri';
@@ -16,7 +14,8 @@ import * as uuid from 'vs/base/common/uuid';
 import * as pfs from 'vs/base/node/pfs';
 import * as encodingLib from 'vs/base/node/encoding';
 import * as utils from 'vs/workbench/services/files/test/electron-browser/utils';
-import { TestEnvironmentService, TestContextService, TestTextResourceConfigurationService, getRandomTestPath, TestLifecycleService, TestStorageService } from 'vs/workbench/test/workbenchTestServices';
+import { TestEnvironmentService, TestContextService, TestTextResourceConfigurationService, TestLifecycleService, TestStorageService } from 'vs/workbench/test/workbenchTestServices';
+import { getRandomTestPath } from 'vs/base/test/node/testUtils';
 import { TestNotificationService } from 'vs/platform/notification/test/common/testNotificationService';
 import { Workspace, toWorkspaceFolders } from 'vs/platform/workspace/common/workspace';
 import { TestConfigurationService } from 'vs/platform/configuration/test/common/testConfigurationService';
@@ -60,7 +59,7 @@ suite('FileService', () => {
 			assert.ok(event);
 			assert.equal(event.resource.fsPath, resource.fsPath);
 			assert.equal(event.operation, FileOperation.CREATE);
-			assert.equal(event.target.resource.fsPath, resource.fsPath);
+			assert.equal(event.target!.resource.fsPath, resource.fsPath);
 			toDispose.dispose();
 		});
 	});
@@ -71,7 +70,7 @@ suite('FileService', () => {
 
 		fs.writeFileSync(resource.fsPath, ''); // create file
 
-		return service.createFile(resource, contents).then(null, error => {
+		return service.createFile(resource, contents).then(undefined, error => {
 			assert.ok(error);
 		});
 	});
@@ -95,7 +94,7 @@ suite('FileService', () => {
 			assert.ok(event);
 			assert.equal(event.resource.fsPath, resource.fsPath);
 			assert.equal(event.operation, FileOperation.CREATE);
-			assert.equal(event.target.resource.fsPath, resource.fsPath);
+			assert.equal(event.target!.resource.fsPath, resource.fsPath);
 			toDispose.dispose();
 		});
 	});
@@ -116,8 +115,8 @@ suite('FileService', () => {
 				assert.ok(event);
 				assert.equal(event.resource.fsPath, resource.fsPath);
 				assert.equal(event.operation, FileOperation.CREATE);
-				assert.equal(event.target.resource.fsPath, resource.fsPath);
-				assert.equal(event.target.isDirectory, true);
+				assert.equal(event.target!.resource.fsPath, resource.fsPath);
+				assert.equal(event.target!.isDirectory, true);
 				toDispose.dispose();
 			});
 		});
@@ -141,8 +140,8 @@ suite('FileService', () => {
 				assert.ok(event);
 				assert.equal(event.resource.fsPath, resource.fsPath);
 				assert.equal(event.operation, FileOperation.CREATE);
-				assert.equal(event.target.resource.fsPath, resource.fsPath);
-				assert.equal(event.target.isDirectory, true);
+				assert.equal(event.target!.resource.fsPath, resource.fsPath);
+				assert.equal(event.target!.isDirectory, true);
 				toDispose.dispose();
 			});
 		});
@@ -163,7 +162,7 @@ suite('FileService', () => {
 				assert.ok(event);
 				assert.equal(event.resource.fsPath, resource.fsPath);
 				assert.equal(event.operation, FileOperation.MOVE);
-				assert.equal(event.target.resource.fsPath, renamed.resource.fsPath);
+				assert.equal(event.target!.resource.fsPath, renamed.resource.fsPath);
 				toDispose.dispose();
 			});
 		});
@@ -187,7 +186,7 @@ suite('FileService', () => {
 				assert.ok(event);
 				assert.equal(event.resource.fsPath, resource.fsPath);
 				assert.equal(event.operation, FileOperation.MOVE);
-				assert.equal(event.target.resource.fsPath, renamed.resource.fsPath);
+				assert.equal(event.target!.resource.fsPath, renamed.resource.fsPath);
 				toDispose.dispose();
 			});
 		});
@@ -208,7 +207,7 @@ suite('FileService', () => {
 				assert.ok(event);
 				assert.equal(event.resource.fsPath, resource.fsPath);
 				assert.equal(event.operation, FileOperation.MOVE);
-				assert.equal(event.target.resource.fsPath, renamed.resource.fsPath);
+				assert.equal(event.target!.resource.fsPath, renamed.resource.fsPath);
 				toDispose.dispose();
 			});
 		});
@@ -232,7 +231,7 @@ suite('FileService', () => {
 				assert.ok(event);
 				assert.equal(event.resource.fsPath, resource.fsPath);
 				assert.equal(event.operation, FileOperation.MOVE);
-				assert.equal(event.target.resource.fsPath, renamed.resource.fsPath);
+				assert.equal(event.target!.resource.fsPath, renamed.resource.fsPath);
 				toDispose.dispose();
 			});
 		});
@@ -252,7 +251,7 @@ suite('FileService', () => {
 				assert.ok(event);
 				assert.equal(event.resource.fsPath, resource.fsPath);
 				assert.equal(event.operation, FileOperation.MOVE);
-				assert.equal(event.target.resource.fsPath, renamed.resource.fsPath);
+				assert.equal(event.target!.resource.fsPath, renamed.resource.fsPath);
 				toDispose.dispose();
 			});
 		});
@@ -273,7 +272,7 @@ suite('FileService', () => {
 				assert.ok(event);
 				assert.equal(event.resource.fsPath, resource.fsPath);
 				assert.equal(event.operation, FileOperation.MOVE);
-				assert.equal(event.target.resource.fsPath, renamed.resource.fsPath);
+				assert.equal(event.target!.resource.fsPath, renamed.resource.fsPath);
 				toDispose.dispose();
 			});
 		});
@@ -286,7 +285,7 @@ suite('FileService', () => {
 		});
 
 		return service.resolveFile(uri.file(path.join(testDir, 'index.html'))).then(source => {
-			return service.moveFile(uri.file(testDir), uri.file(path.join(testDir, 'binary.txt'))).then(null, (e: Error) => {
+			return service.moveFile(uri.file(testDir), uri.file(path.join(testDir, 'binary.txt'))).then(undefined, (e: Error) => {
 				assert.ok(e);
 
 				assert.ok(!event);
@@ -302,7 +301,7 @@ suite('FileService', () => {
 		});
 
 		return service.resolveFile(uri.file(path.join(testDir, 'index.html'))).then(source => {
-			return service.moveFile(source.resource, uri.file(path.join(testDir, 'binary.txt'))).then(null, (e: FileOperationError) => {
+			return service.moveFile(source.resource, uri.file(path.join(testDir, 'binary.txt'))).then(undefined, (e: FileOperationError) => {
 				assert.equal(e.fileOperationResult, FileOperationResult.FILE_MOVE_CONFLICT);
 
 				assert.ok(!event);
@@ -326,7 +325,7 @@ suite('FileService', () => {
 				assert.ok(event);
 				assert.equal(event.resource.fsPath, resource.fsPath);
 				assert.equal(event.operation, FileOperation.MOVE);
-				assert.equal(event.target.resource.fsPath, renamed.resource.fsPath);
+				assert.equal(event.target!.resource.fsPath, renamed.resource.fsPath);
 				toDispose.dispose();
 			});
 		});
@@ -359,7 +358,7 @@ suite('FileService', () => {
 					assert.ok(moveEvent);
 
 					assert.equal(moveEvent.resource.fsPath, resource.fsPath);
-					assert.equal(moveEvent.target.resource.fsPath, moved.resource.fsPath);
+					assert.equal(moveEvent!.target!.resource.fsPath, moved.resource.fsPath);
 
 					assert.equal(deleteEvent.resource.fsPath, folderResource.fsPath);
 
@@ -384,7 +383,7 @@ suite('FileService', () => {
 				assert.ok(event);
 				assert.equal(event.resource.fsPath, source.resource.fsPath);
 				assert.equal(event.operation, FileOperation.COPY);
-				assert.equal(event.target.resource.fsPath, copied.resource.fsPath);
+				assert.equal(event.target!.resource.fsPath, copied.resource.fsPath);
 				toDispose.dispose();
 			});
 		});
@@ -417,7 +416,7 @@ suite('FileService', () => {
 					assert.ok(copyEvent);
 
 					assert.equal(copyEvent.resource.fsPath, resource.fsPath);
-					assert.equal(copyEvent.target.resource.fsPath, copied.resource.fsPath);
+					assert.equal(copyEvent.target!.resource.fsPath, copied.resource.fsPath);
 
 					assert.equal(deleteEvent.resource.fsPath, folderResource.fsPath);
 
@@ -498,19 +497,19 @@ suite('FileService', () => {
 		const resource = uri.file(path.join(testDir, 'deep'));
 		return service.resolveFile(resource).then(source => {
 			return service.del(source.resource).then(() => {
-				return TPromise.wrapError(new Error('Unexpected'));
+				return Promise.reject(new Error('Unexpected'));
 			}, error => {
-				return TPromise.as(true);
+				return Promise.resolve(true);
 			});
 		});
 	});
 
 	test('resolveFile', () => {
 		return service.resolveFile(uri.file(testDir), { resolveTo: [uri.file(path.join(testDir, 'deep'))] }).then(r => {
-			assert.equal(r.children.length, 8);
+			assert.equal(r.children!.length, 8);
 
-			const deep = utils.getByName(r, 'deep');
-			assert.equal(deep.children.length, 4);
+			const deep = utils.getByName(r, 'deep')!;
+			assert.equal(deep.children!.length, 4);
 		});
 	});
 
@@ -521,13 +520,13 @@ suite('FileService', () => {
 		]).then(res => {
 			const r1 = res[0].stat;
 
-			assert.equal(r1.children.length, 8);
+			assert.equal(r1.children!.length, 8);
 
-			const deep = utils.getByName(r1, 'deep');
-			assert.equal(deep.children.length, 4);
+			const deep = utils.getByName(r1, 'deep')!;
+			assert.equal(deep.children!.length, 4);
 
 			const r2 = res[1].stat;
-			assert.equal(r2.children.length, 4);
+			assert.equal(r2.children!.length, 4);
 			assert.equal(r2.name, 'deep');
 		});
 	});
@@ -702,7 +701,7 @@ suite('FileService', () => {
 			return service.resolveContent(resource2).then(c => value2 = c.value);
 		}).then(() => {
 			// load in parallel in expect the same result
-			return TPromise.join([
+			return Promise.all([
 				service.resolveContent(resource1).then(c => assert.equal(c.value, value1)),
 				service.resolveContent(resource2).then(c => assert.equal(c.value, value2))
 			]);
@@ -712,7 +711,7 @@ suite('FileService', () => {
 	test('resolveContent - FILE_IS_BINARY', function () {
 		const resource = uri.file(path.join(testDir, 'binary.txt'));
 
-		return service.resolveContent(resource, { acceptTextOnly: true }).then(null, (e: FileOperationError) => {
+		return service.resolveContent(resource, { acceptTextOnly: true }).then(undefined, (e: FileOperationError) => {
 			assert.equal(e.fileOperationResult, FileOperationResult.FILE_IS_BINARY);
 
 			return service.resolveContent(uri.file(path.join(testDir, 'small.txt')), { acceptTextOnly: true }).then(r => {
@@ -724,7 +723,7 @@ suite('FileService', () => {
 	test('resolveContent - FILE_IS_DIRECTORY', function () {
 		const resource = uri.file(path.join(testDir, 'deep'));
 
-		return service.resolveContent(resource).then(null, (e: FileOperationError) => {
+		return service.resolveContent(resource).then(undefined, (e: FileOperationError) => {
 			assert.equal(e.fileOperationResult, FileOperationResult.FILE_IS_DIRECTORY);
 		});
 	});
@@ -732,7 +731,7 @@ suite('FileService', () => {
 	test('resolveContent - FILE_NOT_FOUND', function () {
 		const resource = uri.file(path.join(testDir, '404.html'));
 
-		return service.resolveContent(resource).then(null, (e: FileOperationError) => {
+		return service.resolveContent(resource).then(undefined, (e: FileOperationError) => {
 			assert.equal(e.fileOperationResult, FileOperationResult.FILE_NOT_FOUND);
 		});
 	});
@@ -741,7 +740,7 @@ suite('FileService', () => {
 		const resource = uri.file(path.join(testDir, 'index.html'));
 
 		return service.resolveContent(resource).then(c => {
-			return service.resolveContent(resource, { etag: c.etag }).then(null, (e: FileOperationError) => {
+			return service.resolveContent(resource, { etag: c.etag }).then(undefined, (e: FileOperationError) => {
 				assert.equal(e.fileOperationResult, FileOperationResult.FILE_NOT_MODIFIED_SINCE);
 			});
 		});
@@ -753,7 +752,7 @@ suite('FileService', () => {
 		return service.resolveContent(resource).then(c => {
 			fs.writeFileSync(resource.fsPath, 'Updates Incoming!');
 
-			return service.updateContent(resource, c.value, { etag: c.etag, mtime: c.mtime - 1000 }).then(null, (e: FileOperationError) => {
+			return service.updateContent(resource, c.value, { etag: c.etag, mtime: c.mtime - 1000 }).then(undefined, (e: FileOperationError) => {
 				assert.equal(e.fileOperationResult, FileOperationResult.FILE_MODIFIED_SINCE);
 			});
 		});

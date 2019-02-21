@@ -3,10 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { TPromise } from 'vs/base/common/winjs.base';
 import { IDisposable } from 'vs/base/common/lifecycle';
 import { guessMimeTypes } from 'vs/base/common/mime';
-import * as paths from 'vs/base/common/paths';
+import { extname } from 'vs/base/common/path';
 import { URI } from 'vs/base/common/uri';
 import { IConfigurationService, ConfigurationTarget, ConfigurationTargetToString } from 'vs/platform/configuration/common/configuration';
 import { IKeybindingService, KeybindingSource } from 'vs/platform/keybinding/common/keybinding';
@@ -16,11 +15,11 @@ import { ILogService } from 'vs/platform/log/common/log';
 export const NullTelemetryService = new class implements ITelemetryService {
 	_serviceBrand: undefined;
 	publicLog(eventName: string, data?: ITelemetryData) {
-		return TPromise.wrap<void>(void 0);
+		return Promise.resolve(undefined);
 	}
 	isOptedIn: true;
-	getTelemetryInfo(): TPromise<ITelemetryInfo> {
-		return TPromise.wrap({
+	getTelemetryInfo(): Promise<ITelemetryInfo> {
+		return Promise.resolve({
 			instanceId: 'someValue.instanceId',
 			sessionId: 'someValue.sessionId',
 			machineId: 'someValue.machineId'
@@ -30,17 +29,17 @@ export const NullTelemetryService = new class implements ITelemetryService {
 
 export interface ITelemetryAppender {
 	log(eventName: string, data: any): void;
-	dispose(): TPromise<any>;
+	dispose(): Promise<any> | undefined;
 }
 
 export function combinedAppender(...appenders: ITelemetryAppender[]): ITelemetryAppender {
 	return {
 		log: (e, d) => appenders.forEach(a => a.log(e, d)),
-		dispose: () => TPromise.join(appenders.map(a => a.dispose()))
+		dispose: () => Promise.all(appenders.map(a => a.dispose()))
 	};
 }
 
-export const NullAppender: ITelemetryAppender = { log: () => null, dispose: () => TPromise.as(null) };
+export const NullAppender: ITelemetryAppender = { log: () => null, dispose: () => Promise.resolve(null) };
 
 
 export class LogAppender implements ITelemetryAppender {
@@ -48,8 +47,8 @@ export class LogAppender implements ITelemetryAppender {
 	private commonPropertiesRegex = /^sessionID$|^version$|^timestamp$|^commitHash$|^common\./;
 	constructor(@ILogService private readonly _logService: ILogService) { }
 
-	dispose(): TPromise<any> {
-		return TPromise.as(undefined);
+	dispose(): Promise<any> {
+		return Promise.resolve(undefined);
 	}
 
 	log(eventName: string, data: any): void {
@@ -80,7 +79,7 @@ export interface URIDescriptor {
 
 export function telemetryURIDescriptor(uri: URI, hashPath: (path: string) => string): URIDescriptor {
 	const fsPath = uri && uri.fsPath;
-	return fsPath ? { mimeType: guessMimeTypes(fsPath).join(', '), scheme: uri.scheme, ext: paths.extname(fsPath), path: hashPath(fsPath) } : {};
+	return fsPath ? { mimeType: guessMimeTypes(fsPath).join(', '), scheme: uri.scheme, ext: extname(fsPath), path: hashPath(fsPath) } : {};
 }
 
 /**
@@ -96,6 +95,7 @@ const configurationValueWhitelist = [
 	'editor.rulers',
 	'editor.wordSeparators',
 	'editor.tabSize',
+	'editor.indentSize',
 	'editor.insertSpaces',
 	'editor.detectIndentation',
 	'editor.roundedSelection',
@@ -136,6 +136,7 @@ const configurationValueWhitelist = [
 	'editor.overviewRulerLanes',
 	'editor.overviewRulerBorder',
 	'editor.cursorBlinking',
+	'editor.cursorSmoothCaretAnimation',
 	'editor.cursorStyle',
 	'editor.mouseWheelZoom',
 	'editor.fontLigatures',

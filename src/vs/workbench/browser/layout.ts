@@ -17,7 +17,7 @@ import { memoize } from 'vs/base/common/decorators';
 import { NotificationsCenter } from 'vs/workbench/browser/parts/notifications/notificationsCenter';
 import { NotificationsToasts } from 'vs/workbench/browser/parts/notifications/notificationsToasts';
 import { Dimension, getClientArea, size, position, hide, show } from 'vs/base/browser/dom';
-import { IEditorGroupsService } from 'vs/workbench/services/group/common/editorGroupsService';
+import { IEditorGroupsService } from 'vs/workbench/services/editor/common/editorGroupsService';
 import { EditorPart } from 'vs/workbench/browser/parts/editor/editorPart';
 import { TitlebarPart } from 'vs/workbench/browser/parts/titlebar/titlebarPart';
 import { ActivitybarPart } from 'vs/workbench/browser/parts/activitybar/activitybarPart';
@@ -25,7 +25,6 @@ import { SidebarPart } from 'vs/workbench/browser/parts/sidebar/sidebarPart';
 import { PanelPart } from 'vs/workbench/browser/parts/panel/panelPart';
 import { StatusbarPart } from 'vs/workbench/browser/parts/statusbar/statusbarPart';
 import { getZoomFactor } from 'vs/base/browser/browser';
-import * as perf from 'vs/base/common/performance';
 
 const TITLE_BAR_HEIGHT = isMacintosh ? 22 : 30;
 const STATUS_BAR_HEIGHT = 22;
@@ -83,12 +82,12 @@ export class WorkbenchLayout extends Disposable implements IVerticalSashLayoutPr
 		private quickInput: QuickInputService,
 		private notificationsCenter: NotificationsCenter,
 		private notificationsToasts: NotificationsToasts,
-		@IStorageService private storageService: IStorageService,
-		@IContextViewService private contextViewService: IContextViewService,
-		@IPartService private partService: IPartService,
-		@IViewletService private viewletService: IViewletService,
-		@IThemeService private themeService: IThemeService,
-		@IEditorGroupsService private editorGroupService: IEditorGroupsService
+		@IStorageService private readonly storageService: IStorageService,
+		@IContextViewService private readonly contextViewService: IContextViewService,
+		@IPartService private readonly partService: IPartService,
+		@IViewletService private readonly viewletService: IViewletService,
+		@IThemeService private readonly themeService: IThemeService,
+		@IEditorGroupsService private readonly editorGroupService: IEditorGroupsService
 	) {
 		super();
 
@@ -551,7 +550,6 @@ export class WorkbenchLayout extends Disposable implements IVerticalSashLayoutPr
 		// Bug on Chrome: Sometimes Chrome wants to scroll the workbench container on layout changes. The fix is to reset scrolling in this case.
 		// uses set time to ensure this happens in th next frame (RAF will be at the end of this JS time slice and we don't want that)
 		setTimeout(() => {
-			perf.mark('willCheckAndFixWorkbenchLayout');
 			const workbenchContainer = this.workbenchContainer;
 			if (workbenchContainer.scrollTop > 0) {
 				workbenchContainer.scrollTop = 0;
@@ -559,7 +557,6 @@ export class WorkbenchLayout extends Disposable implements IVerticalSashLayoutPr
 			if (workbenchContainer.scrollLeft > 0) {
 				workbenchContainer.scrollLeft = 0;
 			}
-			perf.mark('didCheckAndFixWorkbenchLayout');
 		});
 
 		// Title Part

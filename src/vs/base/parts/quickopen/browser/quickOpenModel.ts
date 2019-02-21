@@ -4,15 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as nls from 'vs/nls';
-import { TPromise } from 'vs/base/common/winjs.base';
 import * as types from 'vs/base/common/types';
 import { URI } from 'vs/base/common/uri';
 import { ITree, IActionProvider } from 'vs/base/parts/tree/browser/tree';
 import { IconLabel, IIconLabelValueOptions } from 'vs/base/browser/ui/iconLabel/iconLabel';
-import { IQuickNavigateConfiguration, IModel, IDataSource, IFilter, IAccessiblityProvider, IRenderer, IRunner, Mode } from 'vs/base/parts/quickopen/common/quickOpen';
+import { IQuickNavigateConfiguration, IModel, IDataSource, IFilter, IAccessiblityProvider, IRenderer, IRunner, Mode, IEntryRunContext } from 'vs/base/parts/quickopen/common/quickOpen';
 import { Action, IAction, IActionRunner } from 'vs/base/common/actions';
 import { compareAnything } from 'vs/base/common/comparers';
-import { ActionBar, IActionItem } from 'vs/base/browser/ui/actionbar/actionbar';
+import { ActionBar } from 'vs/base/browser/ui/actionbar/actionbar';
 import { HighlightedLabel } from 'vs/base/browser/ui/highlightedlabel/highlightedLabel';
 import * as DOM from 'vs/base/browser/dom';
 import { IQuickOpenStyles } from 'vs/base/parts/quickopen/browser/quickOpenWidget';
@@ -20,6 +19,7 @@ import { KeybindingLabel } from 'vs/base/browser/ui/keybindingLabel/keybindingLa
 import { OS } from 'vs/base/common/platform';
 import { ResolvedKeybinding } from 'vs/base/common/keyCodes';
 import { IItemAccessor } from 'vs/base/parts/quickopen/common/quickOpenScorer';
+import { coalesce } from 'vs/base/common/arrays';
 
 export interface IContext {
 	event: any;
@@ -35,18 +35,18 @@ let IDS = 0;
 
 export class QuickOpenItemAccessorClass implements IItemAccessor<QuickOpenEntry> {
 
-	getItemLabel(entry: QuickOpenEntry): string {
+	getItemLabel(entry: QuickOpenEntry): string | null {
 		return entry.getLabel();
 	}
 
-	getItemDescription(entry: QuickOpenEntry): string {
+	getItemDescription(entry: QuickOpenEntry): string | null {
 		return entry.getDescription();
 	}
 
-	getItemPath(entry: QuickOpenEntry): string {
+	getItemPath(entry: QuickOpenEntry): string | undefined {
 		const resource = entry.getResource();
 
-		return resource ? resource.fsPath : void 0;
+		return resource ? resource.fsPath : undefined;
 	}
 }
 
@@ -55,8 +55,8 @@ export const QuickOpenItemAccessor = new QuickOpenItemAccessorClass();
 export class QuickOpenEntry {
 	private id: string;
 	private labelHighlights: IHighlight[];
-	private descriptionHighlights: IHighlight[];
-	private detailHighlights: IHighlight[];
+	private descriptionHighlights?: IHighlight[];
+	private detailHighlights?: IHighlight[];
 	private hidden: boolean;
 
 	constructor(highlights: IHighlight[] = []) {
@@ -75,14 +75,14 @@ export class QuickOpenEntry {
 	/**
 	 * The label of the entry to identify it from others in the list
 	 */
-	getLabel(): string {
+	getLabel(): string | null {
 		return null;
 	}
 
 	/**
 	 * The options for the label to use for this entry
 	 */
-	getLabelOptions(): IIconLabelValueOptions {
+	getLabelOptions(): IIconLabelValueOptions | null {
 		return null;
 	}
 
@@ -90,50 +90,49 @@ export class QuickOpenEntry {
 	 * The label of the entry to use when a screen reader wants to read about the entry
 	 */
 	getAriaLabel(): string {
-		return [this.getLabel(), this.getDescription(), this.getDetail()]
-			.filter(s => !!s)
+		return coalesce([this.getLabel(), this.getDescription(), this.getDetail()])
 			.join(', ');
 	}
 
 	/**
 	 * Detail information about the entry that is optional and can be shown below the label
 	 */
-	getDetail(): string {
+	getDetail(): string | null {
 		return null;
 	}
 
 	/**
 	 * The icon of the entry to identify it from others in the list
 	 */
-	getIcon(): string {
+	getIcon(): string | null {
 		return null;
 	}
 
 	/**
 	 * A secondary description that is optional and can be shown right to the label
 	 */
-	getDescription(): string {
+	getDescription(): string | null {
 		return null;
 	}
 
 	/**
 	 * A tooltip to show when hovering over the entry.
 	 */
-	getTooltip(): string {
+	getTooltip(): string | null {
 		return null;
 	}
 
 	/**
 	 * A tooltip to show when hovering over the description portion of the entry.
 	 */
-	getDescriptionTooltip(): string {
+	getDescriptionTooltip(): string | null {
 		return null;
 	}
 
 	/**
 	 * An optional keybinding to show for an entry.
 	 */
-	getKeybinding(): ResolvedKeybinding {
+	getKeybinding(): ResolvedKeybinding | null {
 		return null;
 	}
 
@@ -141,7 +140,7 @@ export class QuickOpenEntry {
 	 * A resource for this entry. Resource URIs can be used to compare different kinds of entries and group
 	 * them together.
 	 */
-	getResource(): URI {
+	getResource(): URI | null {
 		return null;
 	}
 
@@ -171,7 +170,7 @@ export class QuickOpenEntry {
 	/**
 	 * Allows to return highlight ranges that should show up for the entry label and description.
 	 */
-	getHighlights(): [IHighlight[] /* Label */, IHighlight[] /* Description */, IHighlight[] /* Detail */] {
+	getHighlights(): [IHighlight[] /* Label */, IHighlight[] | undefined /* Description */, IHighlight[] | undefined /* Detail */] {
 		return [this.labelHighlights, this.descriptionHighlights, this.detailHighlights];
 	}
 
@@ -181,7 +180,7 @@ export class QuickOpenEntry {
 	 *
 	 * The context parameter provides additional context information how the run was triggered.
 	 */
-	run(mode: Mode, context: IContext): boolean {
+	run(mode: Mode, context: IEntryRunContext): boolean {
 		return false;
 	}
 
@@ -196,9 +195,9 @@ export class QuickOpenEntry {
 }
 
 export class QuickOpenEntryGroup extends QuickOpenEntry {
-	private entry: QuickOpenEntry;
-	private groupLabel: string;
-	private withBorder: boolean;
+	private entry?: QuickOpenEntry;
+	private groupLabel?: string;
+	private withBorder?: boolean;
 
 	constructor(entry?: QuickOpenEntry, groupLabel?: string, withBorder?: boolean) {
 		super();
@@ -211,11 +210,11 @@ export class QuickOpenEntryGroup extends QuickOpenEntry {
 	/**
 	 * The label of the group or null if none.
 	 */
-	getGroupLabel(): string {
+	getGroupLabel(): string | undefined {
 		return this.groupLabel;
 	}
 
-	setGroupLabel(groupLabel: string): void {
+	setGroupLabel(groupLabel: string | undefined): void {
 		this.groupLabel = groupLabel;
 	}
 
@@ -223,18 +222,18 @@ export class QuickOpenEntryGroup extends QuickOpenEntry {
 	 * Whether to show a border on top of the group entry or not.
 	 */
 	showBorder(): boolean {
-		return this.withBorder;
+		return !!this.withBorder;
 	}
 
 	setShowBorder(showBorder: boolean): void {
 		this.withBorder = showBorder;
 	}
 
-	getLabel(): string {
+	getLabel(): string | null {
 		return this.entry ? this.entry.getLabel() : super.getLabel();
 	}
 
-	getLabelOptions(): IIconLabelValueOptions {
+	getLabelOptions(): IIconLabelValueOptions | null {
 		return this.entry ? this.entry.getLabelOptions() : super.getLabelOptions();
 	}
 
@@ -242,27 +241,27 @@ export class QuickOpenEntryGroup extends QuickOpenEntry {
 		return this.entry ? this.entry.getAriaLabel() : super.getAriaLabel();
 	}
 
-	getDetail(): string {
+	getDetail(): string | null {
 		return this.entry ? this.entry.getDetail() : super.getDetail();
 	}
 
-	getResource(): URI {
+	getResource(): URI | null {
 		return this.entry ? this.entry.getResource() : super.getResource();
 	}
 
-	getIcon(): string {
+	getIcon(): string | null {
 		return this.entry ? this.entry.getIcon() : super.getIcon();
 	}
 
-	getDescription(): string {
+	getDescription(): string | null {
 		return this.entry ? this.entry.getDescription() : super.getDescription();
 	}
 
-	getEntry(): QuickOpenEntry {
+	getEntry(): QuickOpenEntry | undefined {
 		return this.entry;
 	}
 
-	getHighlights(): [IHighlight[], IHighlight[], IHighlight[]] {
+	getHighlights(): [IHighlight[], IHighlight[] | undefined, IHighlight[] | undefined] {
 		return this.entry ? this.entry.getHighlights() : super.getHighlights();
 	}
 
@@ -278,7 +277,7 @@ export class QuickOpenEntryGroup extends QuickOpenEntry {
 		this.entry ? this.entry.setHidden(hidden) : super.setHidden(hidden);
 	}
 
-	run(mode: Mode, context: IContext): boolean {
+	run(mode: Mode, context: IEntryRunContext): boolean {
 		return this.entry ? this.entry.run(mode, context) : super.run(mode, context);
 	}
 }
@@ -289,19 +288,19 @@ class NoActionProvider implements IActionProvider {
 		return false;
 	}
 
-	getActions(tree: ITree, element: any): TPromise<IAction[]> {
-		return TPromise.as(null);
+	getActions(tree: ITree, element: any): IAction[] | null {
+		return null;
 	}
 
 	hasSecondaryActions(tree: ITree, element: any): boolean {
 		return false;
 	}
 
-	getSecondaryActions(tree: ITree, element: any): TPromise<IAction[]> {
-		return TPromise.as(null);
+	getSecondaryActions(tree: ITree, element: any): IAction[] | null {
+		return null;
 	}
 
-	getActionItem(tree: ITree, element: any, action: Action): IActionItem {
+	getActionItem(tree: ITree, element: any, action: Action) {
 		return null;
 	}
 }
@@ -317,7 +316,7 @@ export interface IQuickOpenEntryTemplateData {
 }
 
 export interface IQuickOpenEntryGroupTemplateData extends IQuickOpenEntryTemplateData {
-	group: HTMLDivElement;
+	group?: HTMLDivElement;
 }
 
 const templateEntry = 'quickOpenEntry';
@@ -326,9 +325,9 @@ const templateEntryGroup = 'quickOpenEntryGroup';
 class Renderer implements IRenderer<QuickOpenEntry> {
 
 	private actionProvider: IActionProvider;
-	private actionRunner: IActionRunner;
+	private actionRunner?: IActionRunner;
 
-	constructor(actionProvider: IActionProvider = new NoActionProvider(), actionRunner: IActionRunner | null = null) {
+	constructor(actionProvider: IActionProvider = new NoActionProvider(), actionRunner?: IActionRunner) {
 		this.actionProvider = actionProvider;
 		this.actionRunner = actionRunner;
 	}
@@ -357,7 +356,7 @@ class Renderer implements IRenderer<QuickOpenEntry> {
 		// Entry
 		const row1 = DOM.$('.quick-open-row');
 		const row2 = DOM.$('.quick-open-row');
-		const entry = DOM.$('.quick-open-entry', null, row1, row2);
+		const entry = DOM.$('.quick-open-entry', undefined, row1, row2);
 		entryContainer.appendChild(entry);
 
 		// Icon
@@ -380,7 +379,7 @@ class Renderer implements IRenderer<QuickOpenEntry> {
 		const detail = new HighlightedLabel(detailContainer, true);
 
 		// Entry Group
-		let group: HTMLDivElement;
+		let group: HTMLDivElement | undefined;
 		if (templateId === templateEntryGroup) {
 			group = document.createElement('div');
 			DOM.addClass(group, 'results-group');
@@ -421,13 +420,12 @@ class Renderer implements IRenderer<QuickOpenEntry> {
 
 		data.actionBar.context = entry; // make sure the context is the current element
 
-		this.actionProvider.getActions(null, entry).then((actions) => {
-			if (data.actionBar.isEmpty() && actions && actions.length > 0) {
-				data.actionBar.push(actions, { icon: true, label: false });
-			} else if (!data.actionBar.isEmpty() && (!actions || actions.length === 0)) {
-				data.actionBar.clear();
-			}
-		});
+		const actions = this.actionProvider.getActions(null, entry);
+		if (data.actionBar.isEmpty() && actions && actions.length > 0) {
+			data.actionBar.push(actions, { icon: true, label: false });
+		} else if (!data.actionBar.isEmpty() && (!actions || actions.length === 0)) {
+			data.actionBar.clear();
+		}
 
 		// Entry group class
 		if (entry instanceof QuickOpenEntryGroup && entry.getGroupLabel()) {
@@ -444,7 +442,9 @@ class Renderer implements IRenderer<QuickOpenEntry> {
 			// Border
 			if (group.showBorder()) {
 				DOM.addClass(groupData.container, 'results-group-separator');
-				groupData.container.style.borderTopColor = styles.pickerGroupBorder.toString();
+				if (styles.pickerGroupBorder) {
+					groupData.container.style.borderTopColor = styles.pickerGroupBorder.toString();
+				}
 			} else {
 				DOM.removeClass(groupData.container, 'results-group-separator');
 				groupData.container.style.borderTopColor = null;
@@ -452,8 +452,12 @@ class Renderer implements IRenderer<QuickOpenEntry> {
 
 			// Group Label
 			const groupLabel = group.getGroupLabel() || '';
-			groupData.group.textContent = groupLabel;
-			groupData.group.style.color = styles.pickerGroupForeground.toString();
+			if (groupData.group) {
+				groupData.group.textContent = groupLabel;
+				if (styles.pickerGroupForeground) {
+					groupData.group.style.color = styles.pickerGroupForeground.toString();
+				}
+			}
 		}
 
 		// Normal Entry
@@ -467,33 +471,31 @@ class Renderer implements IRenderer<QuickOpenEntry> {
 			// Label
 			const options: IIconLabelValueOptions = entry.getLabelOptions() || Object.create(null);
 			options.matches = labelHighlights || [];
-			options.title = entry.getTooltip();
-			options.descriptionTitle = entry.getDescriptionTooltip() || entry.getDescription(); // tooltip over description because it could overflow
+			options.title = entry.getTooltip() || undefined;
+			options.descriptionTitle = entry.getDescriptionTooltip() || entry.getDescription() || undefined; // tooltip over description because it could overflow
 			options.descriptionMatches = descriptionHighlights || [];
-			data.label.setValue(entry.getLabel(), entry.getDescription(), options);
+			data.label.setLabel(entry.getLabel() || undefined, entry.getDescription() || undefined, options);
 
 			// Meta
-			data.detail.set(entry.getDetail(), detailHighlights);
+			data.detail.set(entry.getDetail() || undefined, detailHighlights);
 
 			// Keybinding
-			data.keybinding.set(entry.getKeybinding(), null);
+			data.keybinding.set(entry.getKeybinding()!);
 		}
 	}
 
 	disposeTemplate(templateId: string, templateData: IQuickOpenEntryGroupTemplateData): void {
 		const data = templateData as IQuickOpenEntryGroupTemplateData;
 		data.actionBar.dispose();
-		data.actionBar = null;
-		data.container = null;
-		data.entry = null;
-		data.keybinding.dispose();
-		data.keybinding = null;
-		data.detail.dispose();
-		data.detail = null;
-		data.group = null;
-		data.icon = null;
+		data.actionBar = null!;
+		data.container = null!;
+		data.entry = null!;
+		data.keybinding = null!;
+		data.detail = null!;
+		data.group = null!;
+		data.icon = null!;
 		data.label.dispose();
-		data.label = null;
+		data.label = null!;
 	}
 }
 
@@ -566,7 +568,7 @@ export class QuickOpenModel implements
 		return entry.getId();
 	}
 
-	getLabel(entry: QuickOpenEntry): string {
+	getLabel(entry: QuickOpenEntry): string | null {
 		return entry.getLabel();
 	}
 
@@ -583,7 +585,7 @@ export class QuickOpenModel implements
 		return !entry.isHidden();
 	}
 
-	run(entry: QuickOpenEntry, mode: Mode, context: IContext): boolean {
+	run(entry: QuickOpenEntry, mode: Mode, context: IEntryRunContext): boolean {
 		return entry.run(mode, context);
 	}
 }
@@ -607,8 +609,8 @@ export function compareEntries(elementA: QuickOpenEntry, elementB: QuickOpenEntr
 	}
 
 	// Fallback to the full path if labels are identical and we have associated resources
-	let nameA = elementA.getLabel();
-	let nameB = elementB.getLabel();
+	let nameA = elementA.getLabel()!;
+	let nameB = elementB.getLabel()!;
 	if (nameA === nameB) {
 		const resourceA = elementA.getResource();
 		const resourceB = elementB.getResource();

@@ -8,7 +8,7 @@ import * as encoding from 'vs/base/node/encoding';
 import { URI as uri } from 'vs/base/common/uri';
 import { IResolveContentOptions, isParent, IResourceEncodings } from 'vs/platform/files/common/files';
 import { isLinux } from 'vs/base/common/platform';
-import { extname } from 'path';
+import { extname } from 'vs/base/common/path';
 import { ITextResourceConfigurationService } from 'vs/editor/common/services/resourceConfiguration';
 import { IEnvironmentService } from 'vs/platform/environment/common/environment';
 import { IWorkspaceContextService } from 'vs/platform/workspace/common/workspace';
@@ -50,7 +50,7 @@ export class ResourceEncodings extends Disposable implements IResourceEncodings 
 	}
 
 	getReadEncoding(resource: uri, options: IResolveContentOptions, detected: encoding.IDetectedEncodingResult): string {
-		let preferredEncoding: string;
+		let preferredEncoding: string | undefined;
 
 		// Encoding passed in as option
 		if (options && options.encoding) {
@@ -118,10 +118,9 @@ export class ResourceEncodings extends Disposable implements IResourceEncodings 
 		return encodingOverride;
 	}
 
-	private getEncodingOverride(resource: uri): string {
+	private getEncodingOverride(resource: uri): string | null {
 		if (resource && this.encodingOverride && this.encodingOverride.length) {
-			for (let i = 0; i < this.encodingOverride.length; i++) {
-				const override = this.encodingOverride[i];
+			for (const override of this.encodingOverride) {
 
 				// check if the resource is child of encoding override path
 				if (override.parent && isParent(resource.fsPath, override.parent.fsPath, !isLinux /* ignorecase */)) {

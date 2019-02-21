@@ -8,8 +8,6 @@ import { ILifecycleService, LifecyclePhase } from 'vs/platform/lifecycle/common/
 import { Registry } from 'vs/platform/registry/common/platform';
 import { runWhenIdle, IdleDeadline } from 'vs/base/common/async';
 
-// --- Workbench Contribution Registry
-
 /**
  * A workbench contribution that will be loaded when the workbench starts and disposed when the workbench shuts down.
  */
@@ -69,7 +67,7 @@ class WorkbenchContributionsRegistry implements IWorkbenchContributionsRegistry 
 		this.instantiationService = instantiationService;
 		this.lifecycleService = lifecycleService;
 
-		[LifecyclePhase.Starting, LifecyclePhase.Restoring, LifecyclePhase.Running, LifecyclePhase.Eventually].forEach(phase => {
+		[LifecyclePhase.Starting, LifecyclePhase.Ready, LifecyclePhase.Restored, LifecyclePhase.Eventually].forEach(phase => {
 			this.instantiateByPhase(instantiationService, lifecycleService, phase);
 		});
 	}

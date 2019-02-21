@@ -3,8 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-'use strict';
-
 import { clipboard } from 'electron';
 import { extHostNamedCustomer } from 'vs/workbench/api/electron-browser/extHostCustomers';
 import { MainContext, MainThreadClipboardShape } from '../node/extHost.protocol';
@@ -22,6 +20,6 @@ export class MainThreadCommands implements MainThreadClipboardShape {
 
 	$writeText(value: string): Promise<void> {
 		clipboard.writeText(value);
-		return undefined;
+		return Promise.resolve();
 	}
 }

@@ -25,7 +25,7 @@ export class TextEditorDecorationType implements vscode.TextEditorDecorationType
 	constructor(proxy: MainThreadTextEditorsShape, options: vscode.DecorationRenderOptions) {
 		this.key = TextEditorDecorationType._Keys.nextId();
 		this._proxy = proxy;
-		this._proxy.$registerTextEditorDecorationType(this.key, <any>/* URI vs Uri */ options);
+		this._proxy.$registerTextEditorDecorationType(this.key, TypeConverters.DecorationRenderOptions.from(options));
 	}
 
 	public dispose(): void {
@@ -142,6 +142,7 @@ export class ExtHostTextEditorOptions implements vscode.TextEditorOptions {
 	private _id: string;
 
 	private _tabSize: number;
+	private _indentSize: number;
 	private _insertSpaces: boolean;
 	private _cursorStyle: TextEditorCursorStyle;
 	private _lineNumbers: TextEditorLineNumbersStyle;
@@ -154,6 +155,7 @@ export class ExtHostTextEditorOptions implements vscode.TextEditorOptions {
 
 	public _accept(source: IResolvedTextEditorConfiguration): void {
 		this._tabSize = source.tabSize;
+		this._indentSize = source.indentSize;
 		this._insertSpaces = source.insertSpaces;
 		this._cursorStyle = source.cursorStyle;
 		this._lineNumbers = source.lineNumbers;
@@ -197,6 +199,47 @@ export class ExtHostTextEditorOptions implements vscode.TextEditorOptions {
 		}
 		warnOnError(this._proxy.$trySetOptions(this._id, {
 			tabSize: tabSize
+		}));
+	}
+
+	public get indentSize(): number | string {
+		return this._indentSize;
+	}
+
+	private _validateIndentSize(value: number | string): number | 'tabSize' | null {
+		if (value === 'tabSize') {
+			return 'tabSize';
+		}
+		if (typeof value === 'number') {
+			let r = Math.floor(value);
+			return (r > 0 ? r : null);
+		}
+		if (typeof value === 'string') {
+			let r = parseInt(value, 10);
+			if (isNaN(r)) {
+				return null;
+			}
+			return (r > 0 ? r : null);
+		}
+		return null;
+	}
+
+	public set indentSize(value: number | string) {
+		let indentSize = this._validateIndentSize(value);
+		if (indentSize === null) {
+			// ignore invalid call
+			return;
+		}
+		if (typeof indentSize === 'number') {
+			if (this._indentSize === indentSize) {
+				// nothing to do
+				return;
+			}
+			// reflect the new indentSize value immediately
+			this._indentSize = indentSize;
+		}
+		warnOnError(this._proxy.$trySetOptions(this._id, {
+			indentSize: indentSize
 		}));
 	}
 
@@ -270,6 +313,19 @@ export class ExtHostTextEditorOptions implements vscode.TextEditorOptions {
 				this._tabSize = tabSize;
 				hasUpdate = true;
 				bulkConfigurationUpdate.tabSize = tabSize;
+			}
+		}
+
+		if (typeof newOptions.indentSize !== 'undefined') {
+			let indentSize = this._validateIndentSize(newOptions.indentSize);
+			if (indentSize === 'tabSize') {
+				hasUpdate = true;
+				bulkConfigurationUpdate.indentSize = indentSize;
+			} else if (typeof indentSize === 'number' && this._indentSize !== indentSize) {
+				// reflect the new indentSize value immediately
+				this._indentSize = indentSize;
+				hasUpdate = true;
+				bulkConfigurationUpdate.indentSize = indentSize;
 			}
 		}
 
@@ -482,7 +538,7 @@ export class ExtHostTextEditor implements vscode.TextEditor {
 		);
 	}
 
-	private _trySetSelection(): Thenable<vscode.TextEditor> {
+	private _trySetSelection(): Promise<vscode.TextEditor> {
 		let selection = this._selections.map(TypeConverters.Selection.from);
 		return this._runOnProxy(() => this._proxy.$trySetSelections(this._id, selection));
 	}
@@ -494,7 +550,7 @@ export class ExtHostTextEditor implements vscode.TextEditor {
 
 	// ---- editing
 
-	edit(callback: (edit: TextEditorEdit) => void, options: { undoStopBefore: boolean; undoStopAfter: boolean; } = { undoStopBefore: true, undoStopAfter: true }): Thenable<boolean> {
+	edit(callback: (edit: TextEditorEdit) => void, options: { undoStopBefore: boolean; undoStopAfter: boolean; } = { undoStopBefore: true, undoStopAfter: true }): Promise<boolean> {
 		if (this._disposed) {
 			return Promise.reject(new Error('TextEditor#edit not possible on closed editors'));
 		}
@@ -503,7 +559,7 @@ export class ExtHostTextEditor implements vscode.TextEditor {
 		return this._applyEdit(edit);
 	}
 
-	private _applyEdit(editBuilder: TextEditorEdit): Thenable<boolean> {
+	private _applyEdit(editBuilder: TextEditorEdit): Promise<boolean> {
 		let editData = editBuilder.finalize();
 
 		// return when there is nothing to do
@@ -557,7 +613,7 @@ export class ExtHostTextEditor implements vscode.TextEditor {
 		});
 	}
 
-	insertSnippet(snippet: SnippetString, where?: Position | Position[] | Range | Range[], options: { undoStopBefore: boolean; undoStopAfter: boolean; } = { undoStopBefore: true, undoStopAfter: true }): Thenable<boolean> {
+	insertSnippet(snippet: SnippetString, where?: Position | Position[] | Range | Range[], options: { undoStopBefore: boolean; undoStopAfter: boolean; } = { undoStopBefore: true, undoStopAfter: true }): Promise<boolean> {
 		if (this._disposed) {
 			return Promise.reject(new Error('TextEditor#insertSnippet not possible on closed editors'));
 		}
@@ -589,7 +645,7 @@ export class ExtHostTextEditor implements vscode.TextEditor {
 
 	// ---- util
 
-	private _runOnProxy(callback: () => Thenable<any>): Thenable<ExtHostTextEditor> {
+	private _runOnProxy(callback: () => Promise<any>): Promise<ExtHostTextEditor> {
 		if (this._disposed) {
 			console.warn('TextEditor is closed/disposed');
 			return Promise.resolve(undefined);
@@ -603,8 +659,8 @@ export class ExtHostTextEditor implements vscode.TextEditor {
 	}
 }
 
-function warnOnError(promise: Thenable<any>): void {
-	promise.then(null, (err) => {
+function warnOnError(promise: Promise<any>): void {
+	promise.then(undefined, (err) => {
 		console.warn(err);
 	});
 }

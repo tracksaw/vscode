@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { TPromise } from 'vs/base/common/winjs.base';
 import { EditorInput, ITextEditorModel } from 'vs/workbench/common/editor';
 import { URI } from 'vs/base/common/uri';
 import { IReference } from 'vs/base/common/lifecycle';
@@ -20,17 +19,17 @@ export class ResourceEditorInput extends EditorInput {
 
 	static readonly ID: string = 'workbench.editors.resourceEditorInput';
 
-	private modelReference: TPromise<IReference<ITextEditorModel>>;
+	private modelReference: Promise<IReference<ITextEditorModel>> | null;
 	private resource: URI;
 	private name: string;
-	private description: string;
+	private description: string | null;
 
 	constructor(
 		name: string,
-		description: string,
+		description: string | null,
 		resource: URI,
-		@ITextModelService private textModelResolverService: ITextModelService,
-		@IHashService private hashService: IHashService
+		@ITextModelService private readonly textModelResolverService: ITextModelService,
+		@IHashService private readonly hashService: IHashService
 	) {
 		super();
 
@@ -58,7 +57,7 @@ export class ResourceEditorInput extends EditorInput {
 		}
 	}
 
-	getDescription(): string {
+	getDescription(): string | null {
 		return this.description;
 	}
 
@@ -81,7 +80,7 @@ export class ResourceEditorInput extends EditorInput {
 		return descriptor;
 	}
 
-	resolve(): TPromise<ITextEditorModel> {
+	resolve(): Promise<ITextEditorModel> {
 		if (!this.modelReference) {
 			this.modelReference = this.textModelResolverService.createModelReference(this.resource);
 		}
@@ -93,7 +92,7 @@ export class ResourceEditorInput extends EditorInput {
 				ref.dispose();
 				this.modelReference = null;
 
-				return TPromise.wrapError<ITextEditorModel>(new Error(`Unexpected model for ResourceInput: ${this.resource}`));
+				return Promise.reject<any>(new Error(`Unexpected model for ResourceInput: ${this.resource}`));
 			}
 
 			return model;
